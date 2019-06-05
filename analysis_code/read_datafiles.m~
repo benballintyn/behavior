@@ -10,13 +10,11 @@ for i=1:length(datafiles)
     tvec = timestamps - timestamps(1);
     data(i).tvec = tvec;
     tvecdiff = diff(tvec);
-    [b,a] = butter(4,[30]/(.5*(1/mean(tvecdiff))),'low');
+    [b,a] = butter(4,[50]/(.5*(1/mean(tvecdiff))),'low');
     v = filtfilt(b,a,raw_voltage);
     data(i).raw_voltage = raw_voltage;
     data(i).lowpass_voltage = v;
-    [b,a] = butter(4,[40 80]/(.5*(1/mean(tvecdiff))),'stop');
-    y = filtfilt(b,a,raw_voltage);
-    %y = bandpass(raw_voltage,[100 200],1/mean(diff(tvec)));
+    y = bandpass(raw_voltage,[100 200],1/mean(diff(tvec)));
     data(i).bandpass_voltage = y;
     temp = find(tvec > expt_start*60);
     expt_start_ind = temp(1);
@@ -26,8 +24,8 @@ for i=1:length(datafiles)
     data(i).zbandpass = (y - mean(baseline))/std(baseline);
     baseline = raw_voltage(1:expt_start_ind);
     data(i).zraw = (raw_voltage - mean(baseline))/std(baseline);
-    data(i).ema_fast = getEMA(raw_voltage,.5);
-    data(i).ema_slow = getEMA(raw_voltage,.25);
+    data(i).ema1 = getEMA(raw_voltage,.3);
+    data(2).ema2 = getEMA(raw_voltage,.02);
 end
 end
 
