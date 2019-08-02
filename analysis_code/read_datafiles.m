@@ -4,6 +4,7 @@ datafiles = dir([datadir '/' date animal '*.txt']);
 expt_start = 5; % baseline for 5 minutes in or 300 seconds
 for i=1:length(datafiles)
     data(i).datafile = datafiles(i).name;
+    data(i).solution = getSolutionType(data(i).datafile);
     raw_data = load([datadir '/' datafiles(i).name],'-ascii');
     raw_voltage = raw_data(:,1);
     timestamps = raw_data(:,2);
@@ -28,6 +29,7 @@ for i=1:length(datafiles)
     data(i).zraw = (raw_voltage - mean(baseline))/std(baseline);
     data(i).ema_fast = getEMA(raw_voltage,.5);
     data(i).ema_slow = getEMA(raw_voltage,.25);
+    data(i).smoothed_voltage = gaussSmooth(raw_voltage,11);
 end
 end
 
