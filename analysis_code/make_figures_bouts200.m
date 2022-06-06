@@ -1,0 +1,2531 @@
+%% make_figures_bouts200
+clear all; close all;
+figFolder = '/home/ben/phd/behavior/figures/bouts200/08_27_21/';
+if (~exist(figFolder,'dir'))
+    mkdir(figFolder)
+end
+do_save = 1; % Boolean for whether to save figures or not
+animalInfo = load('analyzed_data/animalInfo.mat'); animalInfo=animalInfo.animalInfo;
+
+if (~exist('animalObjs','var'))
+    for i=1:length(animalInfo)
+        animalObjs(i) = animalData(animalInfo(i).animal,animalInfo(i).dates,animalInfo(i).sex,'analyzed_data');
+        disp(['done with ' animalInfo(i).animal])
+    end
+end
+%B = load(['~/phd/talks/Pizza_Talks/nov_2019/B2.mat']); B = B.B;
+%f=@(B,x) B(1).*exp(B(2).*x) + B(3);
+
+% Create table with all bouts and applicable factors
+[boutTable] = createBoutDataTable(animalObjs,'boutType','200');
+
+% get all bouts
+allBouts = [];
+for i=1:length(animalObjs)
+    for j=1:length(animalObjs(i).dates)
+        for k=1:length(animalObjs(i).bouts200{j})
+            if (~isempty(animalObjs(i).bouts200{j}{k}))
+                if (any([animalObjs(i).bouts200{j}{k}.duration] < 0))
+                    disp([animalObjs(i).name ' ' animalObjs(i).dates{j} ' has negative duration bout'])
+                end
+                allBouts = [allBouts animalObjs(i).bouts200{j}{k}];
+            end
+        end
+    end
+end
+
+
+%% Figure 3: bout lengths vs time
+figure;
+for i=1:length(animalObjs)
+    scatter([animalObjs(i).linBouts.onset],[animalObjs(i).linBouts.duration],100,'k.')
+    hold on;
+end
+xlabel('Time(s)','fontsize',15,'fontweight','bold'); ylabel('Bout duration (s)','fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1000])
+if (do_save)
+    figName = 'bout_lengths_vs_time_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+for i=1:length(animalObjs)
+    scatter([animalObjs(i).linDifSolBouts.onset],[animalObjs(i).linDifSolBouts.duration],100,'k.')
+    hold on;
+end
+title('Different solution days only',15,'fontweight','bold')
+xlabel('Time(s)','fontsize',15,'fontweight','bold'); 
+ylabel('Bout duration (s)','fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1000])
+if (do_save)
+    figName = 'bout_lengths_vs_time_difSolDays_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 4: Bout duration as a function of total prior licks
+difSolInds = boutTable.solutionNum ~= boutTable.alternative_solutionNum;
+allBoutDurations = boutTable.duration(difSolInds);
+allBoutNLicks = boutTable.nlicks(difSolInds);
+prevLicks = boutTable.totalPrevLicks(difSolInds);
+prevDurations = boutTable.totalPrevDuration(difSolInds);
+
+[rho,pval] = corr(prevLicks,allBoutDurations);
+exponentialFit = fit(prevLicks,allBoutDurations,'exp1');
+posPrevLicks = find(prevLicks > 0);
+noPrevLicks = find(prevLicks == 0);
+powerFit = fit(prevLicks(posPrevLicks),allBoutDurations(posPrevLicks),'power1');
+adjustedPrevLicks = prevLicks;
+adjustedPrevLicks(noPrevLicks) = 1;
+fullPowerFit = fit(adjustedPrevLicks,allBoutDurations,'power1');
+lf = polyfit(prevLicks,allBoutDurations,1);
+meanBoutDuration = mean(allBoutDurations);
+SStot = sum((allBoutDurations - meanBoutDuration).^2);
+SStotPosPrevLicks = sum((allBoutDurations(posPrevLicks) - meanBoutDuration).^2);
+SSres_linear = sum((allBoutDurations - (lf(1)*prevLicks + lf(2))).^2);
+SSres_exp = sum((allBoutDurations - exponentialFit.a*exp(exponentialFit.b*prevLicks)).^2);
+SSres_power = sum((allBoutDurations(posPrevLicks) - powerFit.a*prevLicks(posPrevLicks).^powerFit.b).^2);
+SSres_power_full = sum((allBoutDurations - fullPowerFit.a*adjustedPrevLicks.^fullPowerFit.b).^2);
+rsquared_linear = 1 - SSres_linear/SStot;
+rsquared_exp = 1 - SSres_exp/SStot;
+rsquared_power = 1 - SSres_power/SStotPosPrevLicks;
+rsquared_power_full = 1 - SSres_power_full/SStot;
+xvals = 0:1:9000;
+figure;
+subplot(1,2,1)
+scatter(prevLicks,allBoutDurations,100,'.')
+hold on;
+plot(xvals,lf(1)*xvals + lf(2))
+plot(xvals,exponentialFit.a*exp(exponentialFit.b*xvals))
+plot(xvals,powerFit.a*xvals.^powerFit.b)
+plot(xvals,fullPowerFit.a*xvals.^fullPowerFit.b)
+xlabel('Total prior licks')
+ylabel('Bout duration')
+text(3000,80,{['\rho = ' num2str(rho)],['p = ' num2str(pval)],['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],...
+    ['R^2 (lin): ' num2str(rsquared_linear)],...
+    ['R^2 (exp): ' num2str(rsquared_exp)],...
+    ['R^2 (pow): ' num2str(rsquared_power)],...
+    ['R^2 (pow full): ' num2str(rsquared_power_full)]})
+legend({'Data','Linear Fit','Exponential Fit','Power law fit','full Power law fit'})
+
+[rho2,pval2]=corr(prevDurations,allBoutDurations);
+lf2 = polyfit(prevDurations,allBoutDurations,1);
+subplot(1,2,2)
+scatter(prevDurations,allBoutDurations,100,'.')
+hold on;
+xvals = 0:1:round(max(prevDurations));
+yvals = lf2(1)*xvals + lf(2);
+plot(xvals,yvals)
+xlabel('Total prior bout time','fontsize',15,'fontweight','bold')
+ylabel('Bout duration','fontsize',15,'fontweight','bold')
+text(max(xvals)/2,4*max(yvals)/5,{['\rho = ' num2str(rho2)],['p = ' num2str(pval2)],['y = ' num2str(lf2(1)) 'x + ' num2str(lf2(2))]})
+set(gcf,'Position',[10 10 1400 1200])
+if (do_save)
+    figName = 'duration_vs_prior_licks_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 5: # of licks vs. bout duration
+figure;
+scatter(boutTable.nlicks,boutTable.duration,100,'.')
+xlabel('# of licks in bout','fontsize',15,'fontweight','bold')
+ylabel('Bout duration','fontsize',15,'fontweight','bold')
+if (do_save)
+    figName = 'nlicks_vs_duration_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 6: Average lick rate by solution
+allNlicksBySolution = cell(1,4);
+allDurationsBySolution = cell(1,4);
+allLickRatesBySolution = cell(1,4);
+for i=1:length(animalObjs)
+    ratInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    for j=1:4
+        curSolInds = find(boutTable.solutionNum == j);
+        curInds = intersect(ratInds,curSolInds);
+        curNLicks = boutTable.nlicks(curInds); %[animalObjs(i).boutsBySolution{j}.nlicks];
+        curDurations = boutTable.duration(curInds); %[animalObjs(i).boutsBySolution{j}.duration];
+        lickRates = curNLicks./curDurations;
+        allNlicksBySolution{j} = [allNlicksBySolution{j} curNLicks'];
+        allDurationsBySolution{j} = [allDurationsBySolution{j} curDurations'];
+        allLickRatesBySolution{j} = [allLickRatesBySolution{j} lickRates'];
+    end
+end
+allLickRates = [];
+solns = [];
+for i=1:4
+    allLickRates = [allLickRates allLickRatesBySolution{i}];
+    solns = [solns ones(1,length(allLickRatesBySolution{i}))*i];
+end
+solnLabels = {'H2O','.01M','.1M','1M'};
+figure;
+notBoxPlot(allLickRates,solns)
+set(gca,'xtick',1:4,'xticklabels',solnLabels,'fontsize',15,'fontweight','bold')
+ylabel('Lick rate','fontsize',15,'fontweight','bold')
+if (do_save)
+    figName = 'lickRateBySolution_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+% Do the same but for different solution days only (so no H2O)
+allNlicksBySolutionDifSolDays = cell(1,3);
+allDurationsBySolutionDifSolDays = cell(1,3);
+allLickRatesBySolutionDifSolDays = cell(1,3);
+difSolInds = find(boutTable.solutionNum ~= boutTable.alternative_solutionNum);
+for i=1:length(animalObjs)
+    ratInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    for j=2:4
+        curSolInds = find(boutTable.solutionNum == j);
+        curInds = intersect(intersect(ratInds,curSolInds),difSolInds);
+        curNLicks = boutTable.nlicks(curInds); %[animalObjs(i).boutsBySolutionDifSolDays{j}.nlicks];
+        curDurations = boutTable.duration(curInds); %[animalObjs(i).boutsBySolutionDifSolDays{j}.duration];
+        lickRates = curNLicks./curDurations;
+        allNlicksBySolution{j-1} = [allNlicksBySolution{j-1} curNLicks'];
+        allDurationsBySolution{j-1} = [allDurationsBySolution{j-1} curDurations'];
+        allLickRatesBySolution{j-1} = [allLickRatesBySolution{j-1} lickRates'];
+    end
+end
+allLickRatesDifSolDays = [];
+solns = [];
+for i=2:4
+    allLickRatesDifSolDays = [allLickRatesDifSolDays allLickRatesBySolution{i}];
+    solns = [solns ones(1,length(allLickRatesBySolution{i}))*(i-1)];
+end
+solnLabels = {'.01M','.1M','1M'};
+figure;
+notBoxPlot(allLickRatesDifSolDays,solns)
+set(gca,'xtick',1:3,'xticklabels',solnLabels,'fontsize',15,'fontweight','bold')
+ylabel('Lick rate','fontsize',15,'fontweight','bold')
+title('Different solution days only','fontsize',15,'fontweight','bold')
+if (do_save)
+    figName = 'lickRateBySolutionDifSolDays_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 7
+% bout duration as a function of previous bout duration
+figure;
+xs = [];
+ys = [];
+difSolInds = find(boutTable.solutionNum ~= boutTable.alternative_solutionNum);
+for i=1:length(animalObjs)
+    ratInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    for j=animalObjs(i).difSolutionDays
+        dayInds = find(strcmp(boutTable.date,animalObjs(i).dates{j}));
+        curInds = intersect(intersect(dayInds,ratInds),difSolInds);
+        durations = boutTable.duration(curInds);
+        xs = [xs durations(1:end-1)'];
+        ys = [ys durations(2:end)'];
+    end
+end
+[rho,pval] = corr(xs',ys');
+lf = polyfit(xs,ys,1);
+scatter(xs,ys,'k.'); xlabel('Bout(n) duration'); ylabel('Bout(n+1) duration')
+x = 0:600;
+hold on; plot(x,lf(1)*x + lf(2))
+text(200,550,['\rho = ' num2str(rho)],'fontweight','bold','fontsize',20)
+text(200,500,['p = ' num2str(pval)],'fontweight','bold','fontsize',20)
+text(200,450,['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],'fontweight','bold','fontsize',20)
+xlabel('Current bout duration (s)','fontsize',15,'fontweight','bold')
+ylabel('Next bout duration (s)','fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1000])
+if (do_save)
+    figName = 'bout_duration_vs_prev_bout_duration_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 12: Bout duration distributions for each solution
+allBoutsBySolution = cell(1,4);
+allBoutsBySolutionDifSolDays = cell(1,3);
+maxDurs = zeros(1,4);
+
+for i=1:4
+    solInds = find(boutTable.solutionNum == i);
+    allBoutsBySolution{i} = boutTable.duration(solInds)';
+    maxDurs(i) = max(allBoutsBySolution{i});
+    if (i > 1)
+        difSolInds = find(boutTable.solutionNum ~= boutTable.alternative_solutionNum);
+        curInds = intersect(solInds,difSolInds);
+        allBoutsBySolutionDifSolDays{i-1} = boutTable.duration(curInds)';
+        maxDursDifSolDays(i-1) = max(allBoutsBySolutionDifSolDays{i-1});
+    end
+end
+
+figure;
+subplot(2,2,1); histogram(allBoutsBySolution{1},'Normalization','pdf','binwidth',1); 
+xlabel('Bout duration (s)','fontsize',15,'fontweight','bold');
+ylabel('Probability density','fontsize',15,'fontweight','bold')
+title('H2O','fontsize',15,'fontweight','bold'); xlim([0 maxDurs(1)]); ylim([0 .2])
+subplot(2,2,2); histogram(allBoutsBySolution{2},'Normalization','pdf','binwidth',1); 
+xlabel('Bout duration (s)','fontsize',15,'fontweight','bold');
+ylabel('Probability density','fontsize',15,'fontweight','bold'); 
+title('.01M NaCl','fontsize',15,'fontweight','bold'); xlim([0 maxDurs(2)]); ylim([0 .2])
+subplot(2,2,3); histogram(allBoutsBySolution{3},'Normalization','pdf','binwidth',1);
+xlabel('Bout duration (s)','fontsize',15,'fontweight','bold');
+ylabel('Probability density','fontsize',15,'fontweight','bold'); 
+title('.1M NaCl','fontsize',15,'fontweight','bold'); xlim([0 maxDurs(3)]); ylim([0 .2])
+subplot(2,2,4); histogram(allBoutsBySolution{4},'Normalization','pdf','binwidth',1);
+xlabel('Bout duration (s)','fontsize',15,'fontweight','bold');
+ylabel('Probability density','fontsize',15,'fontweight','bold');
+title('1M NaCl','fontsize',15,'fontweight','bold'); xlim([0 maxDurs(4)]); ylim([0 .2])
+set(gcf,'Position',[10 10 1600 1600])
+if (do_save)
+    figName = 'bout_duration_distribution_by_solution_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+subplot(2,2,1); histogram(allBoutsBySolutionDifSolDays{1},'Normalization','pdf','binwidth',1);
+xlabel('Bout duration (s)','fontsize',15,'fontweight','bold'); 
+ylabel('Probability density','fontsize',15,'fontweight','bold');
+title('.01M','fontsize',15,'fontweight','bold'); xlim([0 maxDursDifSolDays(1)]); ylim([0 .2])
+subplot(2,2,2); histogram(allBoutsBySolutionDifSolDays{2},'Normalization','pdf','binwidth',1);
+xlabel('Bout duration (s)','fontsize',15,'fontweight','bold');
+ylabel('Probability density','fontsize',15,'fontweight','bold');
+title('.1M NaCl','fontsize',15,'fontweight','bold'); xlim([0 maxDursDifSolDays(2)]); ylim([0 .2])
+subplot(2,2,3); histogram(allBoutsBySolutionDifSolDays{3},'Normalization','pdf','binwidth',1);
+xlabel('Bout duration (s)','fontsize',15,'fontweight','bold');
+ylabel('Probability density','fontsize',15,'fontweight','bold');
+title('1M NaCl','fontsize',15,'fontweight','bold'); xlim([0 maxDursDifSolDays(3)]); ylim([0 .2])
+set(gcf,'Position',[10 10 1600 1600])
+if (do_save)
+    figName = 'bout_duration_distributions_by_solution_difSolDays_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 13: Exponential fits to bout distributions for each solution
+figure;
+for i=1:4
+    muhat = expfit(allBoutsBySolution{i});
+    x = 1:150;
+    plot(x,(1/muhat)*exp(-(1/muhat)*x))
+    hold on;
+end
+xlabel('Bout Duration (s)','fontsize',15,'fontweight','bold'); 
+ylabel('Probability density','fontsize',15,'fontweight','bold')
+legend({'H2O','.01M','.1M','1M'},'fontsize',15,'fontweight','bold');
+set(gcf,'Position',[10 10 1200 1000])
+if (do_save)
+    figName = 'bout_duration_exp_fits_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+for i=1:3
+    muhat = expfit(allBoutsBySolutionDifSolDays{i});
+    x = 1:150;
+    plot(x,(1/muhat)*exp(-(1/muhat)*x))
+    hold on;
+end
+xlabel('Bout Duration (s)','fontsize',15,'fontweight','bold');
+legend({'.01M','.1M','1M'},'fontsize',15,'fontweight','bold');
+ylabel('Probability Density','fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1000])
+title('Different solution days only','fontsize',15,'fontweight','bold')
+if (do_save)
+    figName = 'bout_duration_exp_fits_difSolDays_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 14: Bout durations as a function of solution palatability different solution days only
+difSolInds = find(boutTable.solutionNum ~= boutTable.alternative_solutionNum);
+bd = boutTable.duration(difSolInds);
+relPals = boutTable.palatability(difSolInds);
+[rho,pval] = corr(relPals,bd);
+lf = polyfit(relPals,bd,1);
+
+figure;
+x = min(relPals):.001:max(relPals);
+scatter(relPals,bd,'k.'); hold on; plot(x,x*lf(1)+lf(2))
+xlabel('Palatability','fontsize',15,'fontweight','bold'); 
+ylabel('Bout Duration (s)','fontsize',15,'fontweight','bold')
+text(.2,100,['\rho = ' num2str(rho)],'fontweight','bold','fontsize',20); 
+text(.2, 95,['p = ' num2str(pval)],'fontweight','bold','fontsize',20);
+text(.2,90,['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1200 1000])
+if (do_save)
+    figName = 'bout_duration_vs_current_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 15: Bout durations as a function of alternative palatability
+difSolInds = boutTable.solutionNum ~= boutTable.alternative_solutionNum;
+meanAltPals = boutTable.alternative_palatability(difSolInds);
+bd = boutTable.duration(difSolInds);
+
+[rho,pval] = corr(meanAltPals,bd);
+lf = polyfit(meanAltPals,bd,1);
+x = min(meanAltPals):.001:max(meanAltPals);
+figure;
+scatter(meanAltPals,bd,'k.'); hold on; plot(x,x*lf(1)+lf(2));
+xlabel('Alternative palatability','fontsize',15,'fontweight','bold');
+ylabel('Bout duration (s)','fontsize',15,'fontweight','bold')
+text(.5,100,['\rho = ' num2str(rho)],'fontsize',20,'fontweight','bold')
+text(.5,95,['p = ' num2str(pval)],'fontsize',20,'fontweight','bold')
+text(.5,90,['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],'fontsize',20,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1000])
+if (do_save)
+    figName = 'bout_duration_vs_alternative_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 16: Bout durations as a function of relative palatability difference
+difSolInds = boutTable.solutionNum ~= boutTable.alternative_solutionNum;
+allPalDifs = boutTable.palatability(difSolInds) - boutTable.alternative_palatability(difSolInds);
+allBoutDurs = boutTable.duration(difSolInds);
+uPals = unique(allPalDifs);
+
+figure;
+for i=1:length(uPals)
+    inds = find(allPalDifs == uPals(i));
+    durs = allBoutDurs(inds);
+    muhats(i) = expfit(durs);
+    medianBoutDurs(i) = median(durs);
+    palDifs(i) = allPalDifs(inds(1));
+    scatter(allPalDifs(inds),allBoutDurs(inds),'k.'); hold on;
+    plot([palDifs(i)-.1 palDifs(i)+.1],[muhats(i) muhats(i)],'r')
+end
+xlabel('Palatability difference','fontsize',15,'fontweight','bold');
+ylabel('Bout duration (s)','fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1400 1000])
+if (do_save)
+    figName = 'bout_duration_vs_palatability_difference_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 17: Bout duration vs palatability difference with linear fit and correlation
+figure;
+[rho,pval] = corr(allPalDifs,allBoutDurs);
+scatter(allPalDifs,allBoutDurs,'k.')
+lf = polyfit(allPalDifs,allBoutDurs,1);
+x = min(allPalDifs):.01:max(allPalDifs);
+hold on; plot(x,lf(1)*x + lf(2))
+xlabel('Palatability difference','fontsize',15,'fontweight','bold');
+ylabel('Bout duration (s)','fontsize',15,'fontweight','bold')
+text(-1.8,100,['\rho = ' num2str(rho)],'fontweight','bold','fontsize',20)
+text(-1.8,95,['p = ' num2str(pval)],'fontweight','bold','fontsize',20)
+text(-1.8,90,['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],'fontweight','bold','fontsize',20)
+ylim([0 max(allBoutDurs)+10])
+set(gcf,'Position',[10 10 1400 1000])
+if (do_save)
+    figName = 'bout_duration_vs_palatability_difference_linfit_corr_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 18: Bout duration Exponential means and medians as a function of palatability difference
+figure;
+subplot(1,2,1)
+linfit = polyfit(palDifs,muhats,1);
+linfit2 = polyfit(allPalDifs,allBoutDurs,1);
+[rho,pval] = corr(palDifs',muhats');
+x = min(palDifs):.01:max(palDifs);
+scatter(palDifs,muhats,'k.'); hold on; h1=plot(x,x*linfit(1) + linfit(2)); 
+%h2=plot(x,x*linfit2(1) + linfit2(2));
+ylim([0 15])
+xlabel('Palatability difference','fontsize',15,'fontweight','bold');
+ylabel('Exponential mean','fontsize',15,'fontweight','bold');
+legend([h1],{'Fit to exponential means'},'fontsize',15,'fontweight','bold')
+text(-1.8,14,['\rho = ' num2str(rho)],'fontweight','bold','fontsize',20); 
+text(-1.8,13,['p = ' num2str(pval)],'fontweight','bold','fontsize',20)
+text(-1.8,12,['y = ' num2str(linfit(1)) 'x + ' num2str(linfit(2))],'fontweight','bold','fontsize',20)
+
+subplot(1,2,2)
+linfit3 = polyfit(palDifs,medianBoutDurs,1);
+[rho2,pval2] = corr(palDifs',medianBoutDurs');
+scatter(palDifs,medianBoutDurs,'k.'); hold on; h3 = plot(x,x*linfit3(1) + linfit3(2));
+ylim([0 15])
+xlabel('Palatability difference','fontsize',15,'fontweight','bold');
+ylabel('Median bout length','fontsize',15,'fontweight','bold');
+legend(h3,{'Fit to median bout lengths'},'fontsize',15,'fontweight','bold')
+text(-1.8,14,['\rho = ' num2str(rho2)],'fontweight','bold','fontsize',20); 
+text(-1.8,13,['p = ' num2str(pval2)],'fontweight','bold','fontsize',20)
+text(-1.8,12,['y = ' num2str(linfit3(1)) 'x + ' num2str(linfit3(2))],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'bout_duration_vs_palatability_difference_exp_fit_lin_fit_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 19: Bout lengths as a linear model of current and alternative palatability
+difSolInds = find(boutTable.solutionNum ~= boutTable.alternative_solutionNum);
+for i=1:length(animalObjs)
+    ratInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    curInds = intersect(difSolInds,ratInds);
+    X = [boutTable.palatability(curInds) boutTable.alternative_palatability(curInds) ones(length(curInds),1)];
+    Y = boutTable.duration(curInds);
+    
+    [b,bint,r,rint,stats] = regress(Y,X);
+    multiLinearBoutDurFits(i).b = b;
+    multiLinearBoutDurFits(i).normalizedB = b./mean(Y);
+    multiLinearBoutDurFits(i).bint = bint;
+    multiLinearBoutDurFits(i).r = r;
+    multiLinearBoutDurFits(i).rint = rint;
+    multiLinearBoutDurFits(i).stats = stats;
+end
+z = [multiLinearBoutDurFits.b];
+normalizedZ = [multiLinearBoutDurFits.normalizedB];
+[h1,p1] = ttest(z(1,:));
+[h2,p2] = ttest(z(2,:));
+[h3,p3] = ttest(z(3,:));
+[pr1,hr1] = signrank(z(1,:));
+[pr2,hr2] = signrank(z(2,:));
+[pr3,hr3] = signrank(z(3,:));
+disp(['Result of t-test for Palatability coefficient: H = ' num2str(h1) ', p = ' num2str(p1) ', H = ' num2str(hr1) ', P = ' num2str(pr1)])
+disp(['Result of t-test for Alternative Palatability coefficient: H = ' num2str(h2) ', p = ' num2str(p2) ', H = ' num2str(hr2) ', P = ' num2str(pr2)])
+disp(['Result of t-test for intercept: H = ' num2str(h3) ', p = ' num2str(p3) ', H = ' num2str(hr3) ', P = ' num2str(pr3)])
+
+cmap = jet;
+figure;
+for i=1:length(animalObjs)
+    Zs{i} = multiLinearBoutDurFits(i).b(2)*(0:.01:3)' + multiLinearBoutDurFits(i).b(1)*(0:.01:3) + multiLinearBoutDurFits(i).b(3);
+    surf(0:.01:3,0:.01:3,Zs{i},'FaceColor',cmap(i*floor(size(cmap,1)/length(animalObjs)),:),'FaceAlpha',.3,'EdgeColor',cmap(i*floor(size(cmap,1)/length(animalObjs)),:));
+    hold on;
+end
+xlabel('Current Palatability','fontsize',15,'fontweight','bold');
+ylabel('Alternative palatability','fontsize',15,'fontweight','bold');
+zlabel('Predicted Bout duration','fontsize',15,'fontweight','bold')
+if (do_save)
+    figName = 'palatability_alternativePalatability_boutDuration_planes_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+notBoxPlot([z(1,:) z(2,:)],[ones(1,length(z(1,:))) ones(1,length(z(2,:)))*2])
+ylabel('Regression coefficient','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'Palatability','Alternative palatability'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+if (do_save)
+    figName = 'all_bouts_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+notBoxPlot([normalizedZ(1,:) normalizedZ(2,:)],[ones(1,length(normalizedZ(1,:))) ones(1,length(normalizedZ(2,:)))*2])
+ylabel('Normalized regression coefficient','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'Palatability','Alternative palatability'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+if (do_save)
+    figName = 'all_bouts_normalized_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Bout duration ANOVA
+difSolInds = boutTable.solutionNum ~= boutTable.alternative_solutionNum;
+y = boutTable.duration(difSolInds);
+factors = {boutTable.rat(difSolInds), boutTable.palatability(difSolInds),...
+           boutTable.alternative_palatability(difSolInds),boutTable.totalPrevLicks(difSolInds),...
+           boutTable.back1_duration(difSolInds), boutTable.back2_duration(difSolInds), ...
+           boutTable.back3_duration(difSolInds)};
+
+varnames = {'rat','palatability','alternative_palatability','totalPrevLicks',...
+            'back1_duration','back2_duration','back3_duration'};
+isContinuous = [2,3,4,5,6,7];
+isRandom = [1];
+%isContinuous = [2 3];
+[p,tbl,stats,terms] = anovan(y,factors,'model','interaction','continuous',...
+                             isContinuous,'random',isRandom,'varnames',varnames);
+                         
+%% Bout duration ANOVA (only palatability factors)
+difSolInds = boutTable.solutionNum ~= boutTable.alternative_solutionNum;
+y = boutTable.duration(difSolInds);
+factors = {boutTable.palatability(difSolInds), boutTable.alternative_palatability(difSolInds)};
+varnames = {'palatability','alternative_palatability'};
+isContinuous = [1 2];
+[p,tbl,stats,terms] = anovan(y,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+
+[p,tbl,stats,terms] = anovan(y,factors,'model','linear','continuous',...
+                             isContinuous,'varnames',varnames);
+                         
+%% Bout duration ANOVA (only palatability factors + rat random factor)
+difSolInds = boutTable.solutionNum ~= boutTable.alternative_solutionNum;
+y = boutTable.duration(difSolInds);
+factors = {boutTable.palatability(difSolInds), boutTable.alternative_palatability(difSolInds), boutTable.rat(difSolInds)};
+varnames = {'palatability','alternative_palatability','rat'};
+isContinuous = [1 2];
+isRandom = 3;
+[p,tbl,stats,terms] = anovan(y,factors,'model','interaction','continuous',...
+                             isContinuous,'random',isRandom,'varnames',varnames);
+                         
+[p,tbl,stats,terms] = anovan(y,factors,'model','linear','continuous',...
+                             isContinuous,'random',isRandom,'varnames',varnames);
+
+%% Linear model of bout durations: All animals combined
+difSolInds = boutTable.solutionNum ~= boutTable.alternative_solutionNum;
+Y = boutTable.duration(difSolInds);
+X = [boutTable.palatability(difSolInds) boutTable.alternative_palatability(difSolInds)...
+     boutTable.totalPrevLicks(difSolInds) boutTable.back1_duration(difSolInds)...
+     boutTable.back2_duration(difSolInds) boutTable.back3_duration(difSolInds) ...
+     ones(sum(difSolInds),1)];
+[b,bint,r,rint,stats] = regress(Y,X);
+
+%% Figure 27: Animal specific linear models of bout duration following a stay or switch decision
+clear switchDurs switchAltPals switchPals stayDurs stayAltPals stayPals
+switchDurs = [];
+switchAltPals = [];
+switchPals = [];
+stayDurs = [];
+stayAltPals = [];
+stayPals = [];
+count = 0;
+switchCount = 0;
+stayCount = 0;
+%for i=setdiff(1:length(animalObjs),5) % exclude bb12
+difSolInds = find(boutTable.solutionNum ~= boutTable.alternative_solutionNum);
+for i=1:length(animalObjs)
+    count = count+1;
+    switchX = [];
+    switchY = [];
+    stayX = [];
+    stayY = [];
+    ratInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    for j=animalObjs(i).difSolutionDays
+        dayInds = find(strcmp(boutTable.date,animalObjs(i).dates{j}));
+        curInds = intersect(ratInds,dayInds);
+        curBoutNums = boutTable.boutNumber(curInds);
+        [~,sortedOrder] = sort(curBoutNums);
+        sortedInds = curInds(sortedOrder);
+        for k=2:length(sortedInds)
+            curPal = boutTable.palatability(sortedInds(k));
+            curDur = boutTable.duration(sortedInds(k));
+            if (boutTable.channel(sortedInds(k)) ~= boutTable.channel(sortedInds(k-1)))
+                switchCount = switchCount+1;
+                switchRats{switchCount} = animalObjs(i).name;
+                curAltPal = boutTable.alternative_palatability(sortedInds(k));
+                switchDurs = [switchDurs curDur];
+                switchAltPals = [switchAltPals curAltPal];
+                switchPals = [switchPals curPal];
+                switchX = [switchX; [curPal curAltPal]];
+                switchY = [switchY curDur];
+            else
+                stayCount = stayCount + 1;
+                stayRats{stayCount} = animalObjs(i).name;
+                curAltPal = boutTable.alternative_palatability(sortedInds(k));
+                stayDurs = [stayDurs curDur];
+                stayAltPals = [stayAltPals curAltPal];
+                stayPals = [stayPals curPal];
+                stayX = [stayX; [curPal curAltPal]];
+                stayY = [stayY curDur];
+            end
+        end
+    end
+    switchX = [switchX ones(size(switchX,1),1)];
+    [b,bint,r,rint,stats] = regress(switchY',switchX);
+    switchBs(count,:) = b;
+    switchNormalizedBs(count,:) = b./mean(switchY);
+    switchBINTs{count} = bint;
+    switchRs{count} = r;
+    switchRINTs{count} = rint;
+    switchSTATs{count} = stats;
+    
+    stayX = [stayX ones(size(stayX,1),1)];
+    [b,bint,r,rint,stats] = regress(stayY',stayX);
+    stayBs(count,:) = b;
+    stayNormalizedBs(count,:) = b./mean(stayY);
+    stayBINTs{count} = bint;
+    stayRs{count} = r;
+    stayRINTs{count} = rint;
+    staySTATs{count} = stats;
+end
+
+% Plot bout duration vs alternative palatability after a stay decision
+[rho,pval] = corr(stayDurs',stayAltPals');
+lf = polyfit(stayAltPals,stayDurs,1);
+figure;
+scatter(stayAltPals,stayDurs,100,'k.')
+x=0:.01:3; hold on; plot(x,lf(1)*x + lf(2))
+xlabel('Alternative palatability','fontsize',15,'fontweight','bold')
+ylabel('Bout duration','fontsize',15,'fontweight','bold')
+title('After stay decision','fontsize',15,'fontweight','bold')
+text(1.2,100,['\rho = ' num2str(rho)],'fontweight','bold','fontsize',20)
+text(1.2,95,['p = ' num2str(pval)],'fontweight','bold','fontsize',20)
+text(1.2,90,['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'bout_duration_after_stay_vs_alternative_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+% Plot bout duration vs palatability after a stay decision
+[rho,pval] = corr(stayDurs',stayPals');
+lf = polyfit(stayPals,stayDurs,1);
+figure;
+scatter(stayPals,stayDurs,100,'k.')
+x=0:.01:3; hold on; plot(x,lf(1)*x + lf(2))
+xlabel('Palatability','fontsize',15,'fontweight','bold')
+ylabel('Bout duration','fontsize',15,'fontweight','bold')
+title('After stay decision','fontsize',15,'fontweight','bold')
+text(1.2,100,['\rho = ' num2str(rho)],'fontweight','bold','fontsize',20)
+text(1.2,95,['p = ' num2str(pval)],'fontweight','bold','fontsize',20)
+text(1.2,90,['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'bout_duration_after_stay_vs_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+% Plot bout duration vs alternative palatability after a switch decision
+[rho,pval] = corr(switchDurs',switchAltPals');
+lf = polyfit(switchAltPals,switchDurs,1);
+figure;
+scatter(switchAltPals,switchDurs,100,'k.')
+x=0:.01:3; hold on; plot(x,lf(1)*x + lf(2))
+xlabel('Alternative palatability','fontsize',15,'fontweight','bold')
+ylabel('Bout duration','fontsize',15,'fontweight','bold')
+title('After switch decision','fontsize',15,'fontweight','bold')
+text(1.2,100,['\rho = ' num2str(rho)],'fontweight','bold','fontsize',20)
+text(1.2,95,['p = ' num2str(pval)],'fontweight','bold','fontsize',20)
+text(1.2,90,['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'bout_duration_after_switch_vs_alternative_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+% Plot bout duration vs palatability after a switch decision
+[rho,pval] = corr(switchDurs',switchPals');
+lf = polyfit(switchPals,switchDurs,1);
+figure;
+scatter(switchPals,switchDurs,100,'k.')
+x=0:.01:3; hold on; plot(x,lf(1)*x + lf(2))
+xlabel('Palatability','fontsize',15,'fontweight','bold')
+ylabel('Bout duration','fontsize',15,'fontweight','bold')
+title('After switch decision','fontsize',15,'fontweight','bold')
+text(1.2,100,['\rho = ' num2str(rho)],'fontweight','bold','fontsize',20)
+text(1.2,95,['p = ' num2str(pval)],'fontweight','bold','fontsize',20)
+text(1.2,90,['y = ' num2str(lf(1)) 'x + ' num2str(lf(2))],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'bout_duration_after_switch_vs_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% ANOVA of bout duration (with palatabilities as factors) after stay decision
+factors = {stayPals',stayAltPals'};
+varnames = {'(stay) palatability','(stay) alternative_palatability'};
+isContinuous = [1 2];
+[p,tbl,stats,terms] = anovan(stayDurs,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+
+[p,tbl,stats,terms] = anovan(stayDurs,factors,'model','linear','continuous',...
+                             isContinuous,'varnames',varnames);
+%% ANOVA of bout duration (with palatabilities as factors) after switch decision 
+factors = {switchPals',switchAltPals'};
+varnames = {'(switch) palatability','(switch) alternative_palatability'};
+isContinuous = [1 2];
+[p,tbl,stats,terms] = anovan(switchDurs,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+
+[p,tbl,stats,terms] = anovan(switchDurs,factors,'model','linear','continuous',...
+                             isContinuous,'varnames',varnames);
+%% ANOVA of bout duration (with palatabilities and rat as factors) after stay decision
+factors = {stayPals',stayAltPals', stayRats};
+varnames = {'(stay) palatability','(stay) alternative_palatability', 'rat'};
+isContinuous = [1 2];
+isRandom = [3];
+[p,tbl,stats,terms] = anovan(stayDurs,factors,'model','interaction','continuous',...
+                             isContinuous,'random',isRandom,'varnames',varnames);
+
+%% ANOVA of bout duration (with palatabilities and rat as factors) after switch decision
+factors = {switchPals',switchAltPals', switchRats};
+varnames = {'(switch) palatability','(switch) alternative_palatability', 'rat'};
+isContinuous = [1 2];
+isRandom = [3];
+[p,tbl,stats,terms] = anovan(switchDurs,factors,'model','interaction','continuous',...
+                             isContinuous,'random',isRandom,'varnames',varnames);
+%% Comparison of stay/switch bout duration linear model coefficients
+[p,h] = signrank(stayBs(:,1));
+if (p < .05)
+    disp(['Significant effect of palatability on stay bout durations p = ' num2str(p)])
+else
+    disp(['No significant effect of palatability on stay bout durations p = ' num2str(p)])
+end
+[p,h] = signrank(stayBs(:,2));
+if (p < .05)
+    disp(['Significant effect of alternative palatability on stay bout durations p = ' num2str(p)])
+else
+    disp(['No significant effect of alternative palatability on stay bout durations p = ' num2str(p)])
+end
+[p,h] = signrank(switchBs(:,1));
+if (p < .05)
+    disp(['Significant effect of palatability on switch bout durations p = ' num2str(p)])
+else
+    disp(['No significant effect of palatability on switch bout durations p = ' num2str(p)])
+end
+[p,h] = signrank(switchBs(:,2));
+if (p < .05)
+    disp(['Significant effect of alternative palatability on switch bout durations p = ' num2str(p)])
+else
+    disp(['No significant effect of alternative palatability on switch bout durations p = ' num2str(p)])
+end
+figure;
+notBoxPlot([stayBs(:,1); switchBs(:,1)],[ones(size(stayBs,1),1); ones(size(switchBs,1),1)*2])
+ylabel('Palatability coefficient','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'Stay','Switch'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+if (do_save)
+    figName = 'Stay_vs_switch_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+notBoxPlot([stayBs(:,2); switchBs(:,2)],[ones(size(stayBs,1),1); ones(size(switchBs,1),1)*2])
+ylabel('Alternative palatability coefficient','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'Stay','Switch'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+if (do_save)
+    figName = 'Stay_vs_switch_alternative_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+[p,h] = signrank(stayBs(:,1),switchBs(:,1));
+disp(['Stay vs. Switch palatability coeff comparison: p = ' num2str(p)])
+
+[p,h] = signrank(stayBs(:,2),switchBs(:,2));
+disp(['Stay vs. Switch alternative palatability coeff comparison: p = ' num2str(p)])
+
+figure;
+notBoxPlot([stayNormalizedBs(:,1); switchNormalizedBs(:,1)],[ones(size(stayNormalizedBs,1),1); ones(size(switchBs,1),1)*2])
+ylabel('Normalized palatability coefficient','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'Stay','Switch'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+if (do_save)
+    figName = 'Stay_vs_switch_normalized_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+notBoxPlot([stayNormalizedBs(:,2); switchNormalizedBs(:,2)],[ones(size(stayNormalizedBs,1),1); ones(size(switchNormalizedBs,1),1)*2])
+ylabel({'Normalized alternative','palatability coefficient'},'fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'Stay','Switch'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+if (do_save)
+    figName = 'Stay_vs_switch_normalized_alternative_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Animal specific linear models of bout duration for early and late bouts
+clear earlyX earlyY earlyBs earlyBINTs earlyRs earlyRINTs earlySTATs ...
+      lateX lateY lateBs lateBINTs lateRs lateRINTs lateSTATs
+earlyInds = find(boutTable.early);
+lateInds = find(boutTable.late);
+earlyCount = 0;
+lateCount = 0;
+count = 0;
+for i=1:length(animalObjs)
+    count = count+1;
+    animalInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    earlyX = [];
+    lateX = [];
+    earlyY = [];
+    lateY = [];
+    for j=animalObjs(i).difSolutionDays
+        dayInds = find(strcmp(boutTable.date,animalObjs(i).dates{j}));
+        earlyTableInds = intersect(intersect(animalInds,dayInds),earlyInds);
+        lateTableInds = intersect(intersect(animalInds,dayInds),lateInds);
+        earlyX = [earlyX; [boutTable.palatability(earlyTableInds) boutTable.alternative_palatability(earlyTableInds)]];
+        lateX = [lateX; [boutTable.palatability(lateTableInds) boutTable.alternative_palatability(lateTableInds)]];
+        earlyY = [earlyY; boutTable.duration(earlyTableInds)];
+        lateY = [lateY; boutTable.duration(lateTableInds)];
+        for k=1:length(earlyTableInds)
+            earlyCount = earlyCount + 1;
+            earlyRat{earlyCount} = animalObjs(i).name;
+        end
+        for k=1:length(lateTableInds)
+            lateCount = lateCount + 1;
+            lateRat{lateCount} = animalObjs(i).name;
+        end
+    end
+    earlyX = [earlyX ones(size(earlyX,1),1)];
+    [b,bint,r,rint,stats] = regress(earlyY,earlyX);
+    earlyBs(count,:) = b;
+    earlyNormalizedBs(count,:) = b./mean(earlyY);
+    earlyBINTs{count} = bint;
+    earlyRs{count} = r;
+    earlyRINTs{count} = rint;
+    earlySTATs{count} = stats;
+   
+    lateX = [lateX ones(size(lateX,1),1)];
+    [b,bint,r,rint,stats] = regress(lateY,lateX);
+    lateBs(count,:) = b;
+    lateNormalizedBs(count,:) = b./mean(lateY);
+    lateBINTs{count} = bint;
+    lateRs{count} = r;
+    lateRINTs{count} = rint;
+    lateSTATs{count} = stats;
+end
+[p,h] = signrank(earlyBs(:,1));
+if (p < .05)
+    disp(['Significant effect of palatability on early bout durations p = ' num2str(p)])
+else
+    disp(['No significant effect of palatability on early bout durations p = ' num2str(p)])
+end
+[p,h] = signrank(earlyBs(:,2));
+if (p < .05)
+    disp(['Significant effect of alternative palatability on early bout duration p = ' num2str(p)])
+else
+    disp(['No significant effect of alternative palatability on early bout durations p = ' num2str(p)])
+end
+[p,h] = signrank(lateBs(:,1));
+if (p < .05)
+    disp(['Significant effect of palatability on late bout durations p = ' num2str(p)])
+else
+    disp(['No significant effect of palatability on late bout durations p = ' num2str(p)])
+end
+[p,h] = signrank(lateBs(:,2));
+if (p < .05)
+    disp(['Significant effect of alternative palatability on late bout duration p = ' num2str(p)])
+else
+    disp(['No significant effect of alternative palatability on late bout durations p = ' num2str(p)])
+end
+figure;
+notBoxPlot([earlyBs(:,1); lateBs(:,1)],[ones(size(earlyBs,1),1); ones(size(lateBs,1),1)*2])
+ylabel('Palatability coefficient','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'early','late'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+[p1,h] = signrank(earlyBs(:,1),lateBs(:,1),'tail','right');
+[p2,h] = signrank(lateBs(:,1),earlyBs(:,1),'tail','right');
+if (p1 < .05)
+    disp(['Early palatability coefficients are significantly higher than late coefficients. p = ' num2str(p1)])
+elseif (p2 < .05)
+    disp(['Late palatability coefficients are significantly higher than early coefficients. p = ' num2str(p2)])
+else
+    disp(['Neither early or late palatability coefficients are significantly higher than each other'])
+end
+if (do_save)
+    figName = 'Early_vs_late_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+notBoxPlot([earlyBs(:,2); lateBs(:,2)],[ones(size(earlyBs,1),1); ones(size(lateBs,1),1)*2])
+ylabel('Alternative palatability coefficient','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'early','late'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+[p1,h] = signrank(earlyBs(:,2),lateBs(:,2),'tail','right');
+[p2,h] = signrank(lateBs(:,2),earlyBs(:,2),'tail','right');
+if (p1 < .05)
+    disp(['Early alternative palatability coefficients are significantly higher than late coefficients. p = ' num2str(p1)])
+elseif (p2 < .05)
+    disp(['Late alternative palatability coefficients are significantly higher than early coefficients. p = ' num2str(p2)])
+else
+    disp(['Neither early or late alternative palatability coefficients are significantly higher than each other'])
+end
+if (do_save)
+    figName = 'Early_vs_late_alternative_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+[p1,h] = signrank(abs(earlyBs(:,1)),abs(lateBs(:,1)),'tail','right');
+[p2,h] = signrank(abs(lateBs(:,1)),abs(earlyBs(:,1)),'tail','right');
+if (p1 < .05)
+    disp(['Early palatability coefficient magnitudes are significantly higher than late coefficient magnitudes. p = ' num2str(p1)])
+elseif (p2 < .05)
+    disp(['Late palatability coefficient magnitudes are significantly higher than early coefficient magnitudes. p = ' num2str(p2)])
+else
+    disp(['Neither early or late palatability coefficient magnitudes are significantly higher than each other'])
+end
+notBoxPlot([abs(earlyBs(:,1)); abs(lateBs(:,1))],[ones(size(earlyBs,1),1); ones(size(lateBs,1),1)*2])
+ylabel('Palatablity coefficient magnitude','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'Early','Late'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+if (do_save)
+    figName = 'early_vs_late_palatability_coefficient_magnitudes_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+[p1,h] = signrank(abs(earlyBs(:,2)),abs(lateBs(:,2)),'tail','right');
+[p2,h] = signrank(abs(lateBs(:,2)),abs(earlyBs(:,2)),'tail','right');
+if (p1 < .05)
+    disp(['Early alternative palatability coefficient magnitudes are significantly higher than late coefficient magnitudes. p = ' num2str(p1)])
+elseif (p2 < .05)
+    disp(['Late alternative palatability coefficient magnitudes are significantly higher than early coefficient magnitudes. p = ' num2str(p2)])
+else
+    disp(['Neither early or late alternative palatability coefficient magnitudes are significantly higher than each other'])
+end
+notBoxPlot([abs(earlyBs(:,2)); abs(lateBs(:,2))],[ones(size(earlyBs,1),1); ones(size(lateBs,1),1)*2])
+ylabel('Alternative palatablity coefficient magnitude','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'Early','Late'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+if (do_save)
+    figName = 'early_vs_late_alternative_palatability_coefficient_magnitudes_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+% Boxplots of normalized early vs. late palatability coefficients
+figure;
+notBoxPlot([earlyNormalizedBs(:,1); lateNormalizedBs(:,1)],[ones(size(earlyNormalizedBs,1),1); ones(size(lateNormalizedBs,1),1)*2])
+ylabel('Normalized palatability coefficient','fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'early','late'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+[p1,h] = signrank(earlyNormalizedBs(:,1),lateNormalizedBs(:,1));
+if (p1 < .05)
+    disp(['Early and late palatability coefficients are significantly different. p = ' num2str(p1)])
+else
+    disp(['Early and late palatability coefficients are not significantly different.'])
+end
+if (do_save)
+    figName = 'Early_vs_late_normalized_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+% Boxplots of normalized early vs. late alternative palatability coefficients
+figure;
+notBoxPlot([earlyNormalizedBs(:,2); lateNormalizedBs(:,2)],[ones(size(earlyNormalizedBs,1),1); ones(size(lateNormalizedBs,1),1)*2])
+ylabel({'Normalized Alternative','palatability coefficient'},'fontsize',15,'fontweight','bold')
+set(gca,'xtick',[1 2],'xticklabels',{'early','late'},'fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1200 1200])
+[p1,h] = signrank(earlyNormalizedBs(:,2),lateNormalizedBs(:,2));
+if (p1 < .05)
+    disp(['Early and late palatability coefficients are signficantly different. p = ' num2str(p1)])
+else
+    disp(['Early and late palatability coefficients are significantly different.'])
+end
+if (do_save)
+    figName = 'Early_vs_late_normalized alternative_palatability_coefficients_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% ANOVA of bout duration (with palatabilities as factors) for early bouts
+difSolInds = find(boutTable.solutionNum ~= boutTable.alternative_solutionNum);
+earlyInds = find(boutTable.early);
+inds = intersect(difSolInds,earlyInds);
+earlyDurations = boutTable.duration(inds);
+earlyPalatabilities = boutTable.palatability(inds);
+earlyAlternativePalatabilities = boutTable.alternative_palatability(inds);
+
+factors = {earlyPalatabilities,earlyAlternativePalatabilities};
+varnames = {'(early) palatability', '(early) alternative palatability'};
+isContinuous = [1 2];
+[p,tbl,stats,terms] = anovan(earlyDurations,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+
+[p,tbl,stats,terms] = anovan(earlyDurations,factors,'model','linear','continuous',...
+                             isContinuous,'varnames',varnames);
+                         
+factors = {earlyPalatabilities, earlyAlternativePalatabilities, earlyRat};
+varnames = {'(early) palatability', '(early) alternative palatability', 'rat'};
+isContinuous = [1 2];
+isRandom = [3];
+[p,tbl,stats,terms] = anovan(earlyDurations,factors,'model','interaction','continuous',...
+                             isContinuous,'random',isRandom,'varnames',varnames);
+%% ANOVA of bout duration (with palatabilities as factors) for late bouts
+difSolInds = find(boutTable.solutionNum ~= boutTable.alternative_solutionNum);
+lateInds = find(boutTable.late);
+inds = intersect(difSolInds,lateInds);
+lateDurations = boutTable.duration(inds);
+latePalatabilities = boutTable.palatability(inds);
+lateAlternativePalatabilities = boutTable.alternative_palatability(inds);
+
+factors = {latePalatabilities,lateAlternativePalatabilities};
+varnames = {'(late) palatability', '(late) alternative palatability'};
+isContinuous = [1 2];
+[p,tbl,stats,terms] = anovan(lateDurations,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+
+[p,tbl,stats,terms] = anovan(lateDurations,factors,'model','linear','continuous',...
+                             isContinuous,'varnames',varnames);
+                         
+factors = {latePalatabilities, lateAlternativePalatabilities, lateRat};
+varnames = {'(late) palatability', '(late) alternative palatability', 'rat'};
+isContinuous = [1 2];
+isRandom = [3];
+[p,tbl,stats,terms] = anovan(lateDurations,factors,'model','interaction','continuous',...
+                             isContinuous,'random',isRandom,'varnames',varnames);
+
+%% Figure 19: Get solution transition matrices using all bouts
+boutTransitionProbs = cell(1,length(animalObjs));
+allSolnNswitches = cell(1,length(animalObjs));
+allNbouts = cell(1,length(animalObjs));
+for i=1:length(animalObjs)
+    boutTransitionProbs{i} = cell(4,4);
+    allSolnNswitches{i} = cell(4,4);
+    allNbouts{i} = cell(4,4);
+    for j=1:4
+        for k=j:4
+            if (j == 1 && k > 1)
+                continue;
+            end
+            dayInds = [];
+            for day=1:length(animalObjs(i).dates)
+                if (animalObjs(i).solutions(day,1) == j && animalObjs(i).solutions(day,2) == k)
+                    dayInds = [dayInds day];
+                elseif (animalObjs(i).solutions(day,1) == k && animalObjs(i).solutions(day,2) == j)
+                    dayInds = [dayInds day];
+                end 
+            end
+            if (length(dayInds) > 2)
+                warning([animalObjs(i).name ' solutions ' num2str(j) ' and ' num2str(k) ' too many days identified'])
+            end
+            tCount = zeros(size(animalObjs(i).solutions,2));
+            totalTrans = zeros(1,size(animalObjs(i).solutions,2));
+            for d=1:length(dayInds)
+                [T,transitionCount,totalTransitions,nswitches,nbouts] = getBoutTransitionMatrix(animalObjs(i).bouts200{dayInds(d)},[j k]);
+                tCount = tCount + transitionCount;
+                totalTrans = totalTrans + totalTransitions;
+                allSolnNswitches{i}{j,k} = [allSolnNswitches{i}{j,k} nswitches];
+                allNbouts{i}{j,k} = [allNbouts{i}{j,k} nbouts];
+            end
+            totalT = tCount./totalTrans;
+            boutTransitionProbs{i}{j,k} = totalT;
+        end
+    end
+end
+solutionTransitionMatrices = cell(1,length(animalObjs));
+for i=1:length(animalObjs)
+    solutionTransitionMatrices{i} = getSolutionTransitionMatrix(boutTransitionProbs{i});
+end
+figure;
+transitionProbVals = cell(1,10);
+for k=setdiff(1:length(animalObjs),5) % exclude bb12
+    count = 0;
+    for i=1:4
+        for j=1:4
+            if ((i == 1 || j == 1) && i~=j)
+                continue;
+            else
+                count = count + 1;
+                transitionProbVals{count} = [transitionProbVals{count} solutionTransitionMatrices{k}(i,j)];
+            end
+        end
+    end
+end
+for i=1:length(transitionProbVals)
+    scatter(i*ones(1,length(transitionProbVals{i})),transitionProbVals{i},100,'k.')
+    hold on;
+    plot([i-.2 i+.2],[mean(transitionProbVals{i}) mean(transitionProbVals{i})],'r')
+    plot([i-.2 i+.2],[median(transitionProbVals{i}) median(transitionProbVals{i})],'b')
+end
+xlabels = {'H2O->H2O','.01M->.01M','.1M->.01M','1M->.01M','.01M->.1M','.1M->.1M','1M->.1M','.01M->1M','.1M->1M','1M->1M'};
+set(gca,'xtick',1:10,'xticklabels',xlabels,'xticklabelrotation',20,'fontsize',15,'fontweight','bold'); xlim([0 11]); ylim([0 1])
+ylabel('Transition probability','fontsize',15,'fontweight','bold')
+hold off;
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'transition_probability_by_solution_pair_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 20: Get solution transition matrices for early bouts only
+earlyBoutTransitionProbs = cell(1,length(animalObjs));
+earlyAllSolnNswitches = cell(1,length(animalObjs));
+earlyAllNbouts = cell(1,length(animalObjs));
+for i=1:length(animalObjs)
+    earlyBoutTransitionProbs{i} = cell(4,4);
+    earlyAllSolnNswitches{i} = cell(4,4);
+    earlyAllNbouts{i} = cell(4,4);
+    for j=1:4
+        for k=j:4
+            if (j == 1 && k > 1)
+                continue;
+            end
+            dayInds = [];
+            for day=1:length(animalObjs(i).dates)
+                if (animalObjs(i).solutions(day,1) == j && animalObjs(i).solutions(day,2) == k)
+                    dayInds = [dayInds day];
+                elseif (animalObjs(i).solutions(day,1) == k && animalObjs(i).solutions(day,2) == j)
+                    dayInds = [dayInds day];
+                end 
+            end
+            if (length(dayInds) > 2)
+                warning([animalObjs(i).name ' solutions ' num2str(j) ' and ' num2str(k) ' too many days identified'])
+            end
+            earlyTCount = zeros(size(animalObjs(i).solutions,2));
+            earlyTotalTrans = zeros(1,size(animalObjs(i).solutions,2));
+            for d=1:length(dayInds)
+                [earlyT,earlyTransitionCount,earlyTotalTransitions,earlyNswitches,earlyNbouts] = getBoutTransitionMatrix(animalObjs(i).earlyBouts200{dayInds(d)},[j k]);
+                earlyTCount = earlyTCount + earlyTransitionCount;
+                earlyTotalTrans = earlyTotalTrans + earlyTotalTransitions;
+                earlyAllSolnNswitches{i}{j,k} = [earlyAllSolnNswitches{i}{j,k} earlyNswitches];
+                earlyAllNbouts{i}{j,k} = [earlyAllNbouts{i}{j,k} earlyNbouts];
+            end
+            earlyTotalT = earlyTCount./earlyTotalTrans;
+            earlyBoutTransitionProbs{i}{j,k} = earlyTotalT;
+        end
+    end
+end
+earlySolutionTransitionMatrices = cell(1,length(animalObjs));
+for i=1:length(animalObjs)
+    earlySolutionTransitionMatrices{i} = getSolutionTransitionMatrix(earlyBoutTransitionProbs{i});
+end
+figure;
+earlyTransitionProbVals = cell(1,10);
+for k=setdiff(1:length(animalObjs),5) % exclude bb12
+    count = 0;
+    for i=1:4
+        for j=1:4
+            if ((i == 1 || j == 1) && i~=j)
+                continue;
+            else
+                count = count + 1;
+                earlyTransitionProbVals{count} = [earlyTransitionProbVals{count} earlySolutionTransitionMatrices{k}(i,j)];
+            end
+        end
+    end
+end
+for i=1:length(earlyTransitionProbVals)
+    scatter(i*ones(1,length(earlyTransitionProbVals{i})),earlyTransitionProbVals{i},100,'k.')
+    hold on;
+    plot([i-.2 i+.2],[mean(earlyTransitionProbVals{i},'omitnan') mean(earlyTransitionProbVals{i},'omitnan')],'r')
+    plot([i-.2 i+.2],[median(earlyTransitionProbVals{i},'omitnan') median(earlyTransitionProbVals{i},'omitnan')],'b')
+end
+xlabels = {'H2O->H2O','.01M->.01M','.1M->.01M','1M->.01M','.01M->.1M','.1M->.1M','1M->.1M','.01M->1M','.1M->1M','1M->1M'};
+set(gca,'xtick',1:10,'xticklabels',xlabels,'xticklabelrotation',20,'fontsize',15,'fontweight','bold'); xlim([0 11]); ylim([0 1])
+ylabel('Transition probability','fontsize',15,'fontweight','bold')
+title('Early bouts only','fontsize',15,'fontweight','bold')
+hold off;
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'early_transition_probability_by_solution_pair_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 21: Get solution transition matrices for late bouts only
+lateBoutTransitionProbs = cell(1,length(animalObjs));
+lateAllSolnNswitches = cell(1,length(animalObjs));
+lateAllNbouts = cell(1,length(animalObjs));
+for i=1:length(animalObjs)
+    lateBoutTransitionProbs{i} = cell(4,4);
+    lateAllSolnNswitches{i} = cell(4,4);
+    lateAllNbouts{i} = cell(4,4);
+    for j=1:4
+        for k=j:4
+            if (j == 1 && k > 1)
+                continue;
+            end
+            dayInds = [];
+            for day=1:length(animalObjs(i).dates)
+                if (animalObjs(i).solutions(day,1) == j && animalObjs(i).solutions(day,2) == k)
+                    dayInds = [dayInds day];
+                elseif (animalObjs(i).solutions(day,1) == k && animalObjs(i).solutions(day,2) == j)
+                    dayInds = [dayInds day];
+                end 
+            end
+            if (length(dayInds) > 2)
+                warning([animalObjs(i).name ' solutions ' num2str(j) ' and ' num2str(k) ' too many days identified'])
+            end
+            lateTCount = zeros(size(animalObjs(i).solutions,2));
+            lateTotalTrans = zeros(1,size(animalObjs(i).solutions,2));
+            for d=1:length(dayInds)
+                [lateT,lateTransitionCount,lateTotalTransitions,lateNswitches,lateNbouts] = getBoutTransitionMatrix(animalObjs(i).lateBouts200{dayInds(d)},[j k]);
+                lateTCount = lateTCount + lateTransitionCount;
+                lateTotalTrans = lateTotalTrans + lateTotalTransitions;
+                lateAllSolnNswitches{i}{j,k} = [lateAllSolnNswitches{i}{j,k} lateNswitches];
+                lateAllNbouts{i}{j,k} = [lateAllNbouts{i}{j,k} lateNbouts];
+            end
+            lateTotalT = lateTCount./lateTotalTrans;
+            lateBoutTransitionProbs{i}{j,k} = lateTotalT;
+        end
+    end
+end
+lateSolutionTransitionMatrices = cell(1,length(animalObjs));
+for i=1:length(animalObjs)
+    lateSolutionTransitionMatrices{i} = getSolutionTransitionMatrix(lateBoutTransitionProbs{i});
+end
+figure;
+lateTransitionProbVals = cell(1,10);
+for k=setdiff(1:length(animalObjs),5) % exclude bb12
+    count = 0;
+    for i=1:4
+        for j=1:4
+            if ((i == 1 || j == 1) && i~=j)
+                continue;
+            else
+                count = count + 1;
+                lateTransitionProbVals{count} = [lateTransitionProbVals{count} lateSolutionTransitionMatrices{k}(i,j)];
+            end
+        end
+    end
+end
+for i=1:length(lateTransitionProbVals)
+    scatter(i*ones(1,length(lateTransitionProbVals{i})),lateTransitionProbVals{i},100,'k.')
+    hold on;
+    plot([i-.2 i+.2],[mean(lateTransitionProbVals{i},'omitnan') mean(lateTransitionProbVals{i},'omitnan')],'r')
+    plot([i-.2 i+.2],[median(lateTransitionProbVals{i},'omitnan') median(lateTransitionProbVals{i},'omitnan')],'b')
+end
+xlabels = {'H2O->H2O','.01M->.01M','.1M->.01M','1M->.01M','.01M->.1M','.1M->.1M','1M->.1M','.01M->1M','.1M->1M','1M->1M'};
+set(gca,'xtick',1:10,'xticklabels',xlabels,'xticklabelrotation',20,'fontsize',15,'fontweight','bold'); xlim([0 11]); ylim([0 1])
+ylabel('Transition probability','fontsize',15,'fontweight','bold')
+title('Late bouts only','fontsize',15,'fontweight','bold')
+hold off;
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'late_transition_probability_by_solution_pair_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 22: Plot transition probability as function of current - alternative palatability
+slns = [1 1; 2 2; 3 2; 4 2; 2 3; 3 3; 4 3; 2 4; 3 4; 4 4];
+relPalDifs = cell(1,length(transitionProbVals));
+altPals = cell(1,size(slns,1));
+curPals = cell(1,size(slns,1));
+for i=1:size(slns,1)
+    count = 0;
+    for k=setdiff(1:length(animalObjs),5) % exclude bb12
+        count=count+1;
+        relPalDifs{i}(count) = animalObjs(k).relativePalatabilitiesLicks(slns(i,1)) - animalObjs(k).relativePalatabilitiesLicks(slns(i,2));
+        curPals{i}(count) = animalObjs(k).relativePalatabilitiesLicks(slns(i,1));
+        altPals{i}(count) = animalObjs(k).relativePalatabilitiesLicks(slns(i,2));
+    end
+end
+allTransitionProbVals = [];
+allRelPalDifs = [];
+allCurPals = [];
+allAltPals = [];
+for i=1:length(transitionProbVals)
+    allTransitionProbVals = [allTransitionProbVals transitionProbVals{i}];
+    allRelPalDifs = [allRelPalDifs relPalDifs{i}];
+    allCurPals = [allCurPals curPals{i}];
+    allAltPals = [allAltPals altPals{i}];
+end
+lf1 = polyfit(allRelPalDifs,allTransitionProbVals,1);
+lf2 = polyfit(allCurPals,allTransitionProbVals,1);
+lf3 = polyfit(allAltPals,allTransitionProbVals,1);
+
+[rho1,pval1] = corr(allRelPalDifs',allTransitionProbVals');
+[rho2,pval2] = corr(allCurPals',allTransitionProbVals');
+[rho3,pval3] = corr(allAltPals',allTransitionProbVals');
+figure;
+scatter(allRelPalDifs,allTransitionProbVals,100,'k.')
+x=min(allRelPalDifs):.01:max(allRelPalDifs);
+hold on;
+plot(x,lf1(1)*x + lf1(2))
+xlabel('Current - alternative palatability','fontsize',15,'fontweight','bold');
+ylabel('Transition Probability','fontsize',15,'fontweight','bold')
+text(0,.95,['\rho = ' num2str(rho1)],'fontweight','bold','fontsize',20)
+text(0,.88,['p = ' num2str(pval1)],'fontweight','bold','fontsize',20)
+text(0,.81,['y = ' num2str(lf1(1)) 'x + ' num2str(lf1(2))],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'transition_probability_vs_palatability_difference_linfit_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 23: Plot transition probability as a function of palatability and alternative palatability
+figure;
+scatter(allCurPals,allTransitionProbVals,100,'k.')
+x=min(allCurPals):.01:max(allCurPals);
+hold on;
+plot(x,lf2(1)*x + lf2(2))
+xlabel('Current palatability','fontsize',15,'fontweight','bold');
+ylabel('Transition Probability','fontsize',15,'fontweight','bold')
+text(1.7,.95,['\rho = ' num2str(rho2)],'fontweight','bold','fontsize',20)
+text(1.7,.88,['p = ' num2str(pval2)],'fontweight','bold','fontsize',20)
+%text(1.7,.81,['y = ' num2str(lf2(1)) 'x + ' num2str(lf2(2))],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'transition_probability_vs_current_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+scatter(allAltPals,allTransitionProbVals,100,'k.')
+x=min(allAltPals):.01:max(allAltPals);
+hold on;
+plot(x,lf3(1)*x + lf3(2))
+xlabel('Alternative palatability','fontsize',15,'fontweight','bold');
+ylabel('Transition Probability','fontsize',15,'fontweight','bold')
+text(0.3,.95,['\rho = ' num2str(rho3)],'fontweight','bold','fontsize',20)
+text(0.3,.88,['p = ' num2str(pval3)],'fontweight','bold','fontsize',20)
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'transition_probability_vs_alternative_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Linear model for transition probabilities
+clear YY XX;
+solnPairs = [3 2;
+             2 3;
+             2 4;
+             4 2;
+             3 4;
+             4 3];
+count = 0;
+for i=1:length(animalObjs)
+    for j=1:size(solnPairs,1)
+        count = count + 1;
+        YY(count) = solutionTransitionMatrices{i}(solnPairs(j,1),solnPairs(j,2));
+        XX(count,1) = animalObjs(i).relativePalatabilitiesLicks(solnPairs(j,2));
+        XX(count,2) = animalObjs(i).relativePalatabilitiesLicks(solnPairs(j,1));
+        rat{count} = animalObjs(i).name;
+    end
+end
+XX = [XX ones(size(XX,1),1)];
+[b,bint,r,rint,stats] = regress(YY',XX);
+
+%% Transition probability ANOVA
+factors = {XX(:,1), XX(:,2)};
+isContinuous = [1 2];
+varnames = {'palatability', 'alternative_palatability'};
+[p,tbl,stats,terms] = anovan(YY,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+                         
+%% Transition probability ANOVA with rat as random factor
+factors = {XX(:,1), XX(:,2),rat};
+isContinuous = [1 2];
+isRandom = 3;
+varnames = {'palatability', 'alternative_palatability','rat'};
+[p,tbl,stats,terms] = anovan(YY,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+
+%% Logistic regression on switch probability
+clear wasSwitch pastPalatability alternativePalatability pastDuration numConsecutive totalDuration
+wasSwitch = [];
+pastPalatability = [];
+alternativePalatability = [];
+pastDuration = [];
+numConsecutive = [];
+totalDuration = [];
+for i=1:length(animalObjs)
+    animalInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    for j=animalObjs(i).difSolutionDays
+        dayInds = find(strcmp(boutTable.date,animalObjs(i).dates{j}));
+        tableInds = intersect(animalInds,dayInds);
+        [~,sortedOrder] = sort(boutTable.boutNumber(tableInds));
+        sortedInds = tableInds(sortedOrder);
+        nconsecutive = 0;
+        curTotalDuration = 0;
+        for k=1:(length(sortedInds) - 1)
+            curTotalDuration = curTotalDuration + boutTable.duration(sortedInds(k));
+            pastPalatability = [pastPalatability boutTable.palatability(sortedInds(k))];
+            alternativePalatability = [alternativePalatability boutTable.alternative_palatability(sortedInds(k))];
+            pastDuration = [pastDuration boutTable.duration(sortedInds(k))];
+            numConsecutive = [numConsecutive nconsecutive];
+            totalDuration = [totalDuration curTotalDuration];
+            if (boutTable.channel(sortedInds(k)) ~= boutTable.channel(sortedInds(k+1))) % If the animal switches
+                wasSwitch = [wasSwitch 1];
+                nconsecutive = 0;
+            else
+                wasSwitch = [wasSwitch 0];
+                nconsecutive = nconsecutive + 1;
+            end
+        end
+    end
+end
+
+glm = fitglm([pastPalatability' alternativePalatability'],wasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([pastPalatability' alternativePalatability' pastDuration'],wasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([pastPalatability' alternativePalatability' pastDuration' numConsecutive'],wasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([pastPalatability' alternativePalatability' pastDuration' numConsecutive' totalDuration'],wasSwitch','interactions','Distribution','binomial','Link','logit');
+glm.plotSlice();
+glm.plotResiduals('probability')
+glm
+glm.Rsquared
+
+palatabilityVals = 0:.01:3;
+alternative_palatabilityVals = 0:.01:3;
+predictedVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+upperCIVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+lowerCIVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+totalEvals = length(palatabilityVals)*length(alternative_palatabilityVals);
+evalCount = 0;
+for i=1:length(palatabilityVals)
+    for j=1:length(palatabilityVals)
+        [y,yci] = glm.predict([palatabilityVals(i),alternative_palatabilityVals(j)]);
+        predictedVals(i,j) = y;
+        lowerCIVals(i,j) = yci(1);
+        upperCIVals(i,j) = yci(2);
+        evalCount = evalCount + 1;
+        if (mod(evalCount,round(totalEvals/10)) == 0)
+            disp([num2str((evalCount/totalEvals)*100) '% done'])
+        end
+    end
+end
+
+%% Surf plot of switch probability as function of palatability and alternative palatability with CIs
+figure;
+surf(palatabilityVals,alternative_palatabilityVals,predictedVals','FaceColor','g','EdgeColor','b','FaceAlpha',.3)
+hold on;
+surf(palatabilityVals,alternative_palatabilityVals,lowerCIVals','LineStyle',':','FaceColor','r','EdgeColor','r','FaceAlpha',.2)
+surf(palatabilityVals,alternative_palatabilityVals,upperCIVals','LineStyle',':','FaceColor','r','EdgeColor','r','FaceAlpha',.2)
+xlabel('Current palatability','fontsize',15,'fontweight','bold');
+ylabel('Alternative palatability','fontsize',15,'fontweight','bold');
+zlabel('Switch probability','fontsize',15,'fontweight','bold')
+
+%% Linear model for early transition probabilities
+clear earlyYY earlyXX earlyRat;
+count = 0;
+for i=1:length(animalObjs)
+    for j=1:size(solnPairs,1)
+        count = count + 1;
+        earlyYY(count) = earlySolutionTransitionMatrices{i}(solnPairs(j,1),solnPairs(j,2));
+        earlyXX(count,1) = animalObjs(i).relativePalatabilitiesLicks(solnPairs(j,2));
+        earlyXX(count,2) = animalObjs(i).relativePalatabilitiesLicks(solnPairs(j,1));
+        earlyRat{count} = animalObjs(i).name;
+    end
+end
+earlyXX = [earlyXX ones(size(earlyXX,1),1)];
+[b,bint,r,rint,stats] = regress(earlyYY',earlyXX);
+
+%% Early Transition probability ANOVA
+factors = {earlyXX(:,1), earlyXX(:,2)};
+isContinuous = [1 2];
+varnames = {'(early) palatability', '(early) alternative_palatability'};
+[p,tbl,stats,terms] = anovan(earlyYY,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+                         
+%% Early Transition probability ANOVA with rat as random factor
+factors = {earlyXX(:,1), earlyXX(:,2),earlyRat};
+isContinuous = [1 2];
+isRandom = 3;
+varnames = {'(early) palatability', '(early) alternative_palatability','rat'};
+[p,tbl,stats,terms] = anovan(earlyYY,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+
+%% Logistic regression on switch probability for early bouts
+clear earlyWasSwitch earlyPastPalatability earlyAlternativePalatability earlyPastDuration ...
+      earlyNumConsecutive earlyTotalDuration
+earlyWasSwitch = [];
+earlyPastPalatability = [];
+earlyAlternativePalatability = [];
+earlyPastDuration = [];
+earlyNumConsecutive = [];
+earlyTotalDuration = [];
+for i=1:length(animalObjs)
+    animalInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    for j=animalObjs(i).difSolutionDays
+        dayInds = find(strcmp(boutTable.date,animalObjs(i).dates{j}));
+        earlyInds = find(boutTable.early);
+        tableInds = intersect(intersect(animalInds,dayInds),earlyInds);
+        [~,sortedOrder] = sort(boutTable.boutNumber(tableInds));
+        sortedInds = tableInds(sortedOrder);
+        nconsecutive = 0;
+        curTotalDuration = 0;
+        for k=1:(length(sortedInds) - 1)
+            curTotalDuration = curTotalDuration + boutTable.duration(sortedInds(k));
+            earlyPastPalatability = [earlyPastPalatability boutTable.palatability(sortedInds(k))];
+            earlyAlternativePalatability = [earlyAlternativePalatability boutTable.alternative_palatability(sortedInds(k))];
+            earlyPastDuration = [earlyPastDuration boutTable.duration(sortedInds(k))];
+            earlyNumConsecutive = [earlyNumConsecutive nconsecutive];
+            earlyTotalDuration = [earlyTotalDuration curTotalDuration];
+            if (boutTable.channel(sortedInds(k)) ~= boutTable.channel(sortedInds(k+1))) % If the animal switches
+                earlyWasSwitch = [earlyWasSwitch 1];
+                nconsecutive = 0;
+            else
+                earlyWasSwitch = [earlyWasSwitch 0];
+                nconsecutive = nconsecutive + 1;
+            end
+        end
+    end
+end
+
+glm = fitglm([earlyPastPalatability' earlyAlternativePalatability'],earlyWasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([earlyPastPalatability' earlyAlternativePalatability' earlyPastDuration'],earlyWasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([earlyPastPalatability' earlyAlternativePalatability' earlyPastDuration' earlyNumConsecutive'],earlyWasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([earlyPastPalatability' earlyAlternativePalatability' earlyPastDuration' earlyNumConsecutive' earlyTotalDuration'],earlyWasSwitch','interactions','Distribution','binomial','Link','logit');
+glm.plotSlice();
+glm.plotResiduals('probability')
+glm
+glm.Rsquared
+
+palatabilityVals = 0:.01:3;
+alternative_palatabilityVals = 0:.01:3;
+earlyPredictedVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+earlyUpperCIVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+earlyLowerCIVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+totalEvals = length(palatabilityVals)*length(alternative_palatabilityVals);
+evalCount = 0;
+for i=1:length(palatabilityVals)
+    for j=1:length(palatabilityVals)
+        [y,yci] = glm.predict([palatabilityVals(i),alternative_palatabilityVals(j)]);
+        earlyPredictedVals(i,j) = y;
+        earlyLowerCIVals(i,j) = yci(1);
+        earlyUpperCIVals(i,j) = yci(2);
+        evalCount = evalCount + 1;
+        if (mod(evalCount,round(totalEvals/10)) == 0)
+            disp([num2str((evalCount/totalEvals)*100) '% done'])
+        end
+    end
+end
+%% Linear model for late transition probabilities
+clear lateYY lateXX lateRat;
+count = 0;
+for i=1:length(animalObjs)
+    for j=1:size(solnPairs,1)
+        count = count + 1;
+        lateYY(count) = lateSolutionTransitionMatrices{i}(solnPairs(j,1),solnPairs(j,2));
+        lateXX(count,1) = animalObjs(i).relativePalatabilitiesLicks(solnPairs(j,2));
+        lateXX(count,2) = animalObjs(i).relativePalatabilitiesLicks(solnPairs(j,1));
+        lateRat{count} = animalObjs(i).name;
+    end
+end
+lateXX = [lateXX ones(size(lateXX,1),1)];
+[b,bint,r,rint,stats] = regress(lateYY',lateXX);
+
+%% Late Transition probability ANOVA
+factors = {lateXX(:,1), lateXX(:,2)};
+isContinuous = [1 2];
+varnames = {'(late) palatability', '(late) alternative_palatability'};
+[p,tbl,stats,terms] = anovan(lateYY,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+                         
+%% Late Transition probability ANOVA with rat as random factor
+factors = {lateXX(:,1), lateXX(:,2),lateRat};
+isContinuous = [1 2];
+isRandom = 3;
+varnames = {'(late) palatability', '(late) alternative_palatability','rat'};
+[p,tbl,stats,terms] = anovan(lateYY,factors,'model','interaction','continuous',...
+                             isContinuous,'varnames',varnames);
+
+%% Logistic regression on switch probability for late bouts
+clear lateWasSwitch latePastPalatability lateAlternativePalatability latePastDuration ...
+      lateNumConsecutive lateTotalDuration
+lateWasSwitch = [];
+latePastPalatability = [];
+lateAlternativePalatability = [];
+latePastDuration = [];
+lateNumConsecutive = [];
+lateTotalDuration = [];
+for i=1:length(animalObjs)
+    animalInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    for j=animalObjs(i).difSolutionDays
+        dayInds = find(strcmp(boutTable.date,animalObjs(i).dates{j}));
+        lateInds = find(boutTable.late);
+        tableInds = intersect(intersect(animalInds,dayInds),lateInds);
+        [~,sortedOrder] = sort(boutTable.boutNumber(tableInds));
+        sortedInds = tableInds(sortedOrder);
+        nconsecutive = 0;
+        curTotalDuration = 0;
+        for k=1:(length(sortedInds) - 1)
+            curTotalDuration = curTotalDuration + boutTable.duration(sortedInds(k));
+            latePastPalatability = [latePastPalatability boutTable.palatability(sortedInds(k))];
+            lateAlternativePalatability = [lateAlternativePalatability boutTable.alternative_palatability(sortedInds(k))];
+            latePastDuration = [latePastDuration boutTable.duration(sortedInds(k))];
+            lateNumConsecutive = [lateNumConsecutive nconsecutive];
+            lateTotalDuration = [lateTotalDuration curTotalDuration];
+            if (boutTable.channel(sortedInds(k)) ~= boutTable.channel(sortedInds(k+1))) % If the animal switches
+                lateWasSwitch = [lateWasSwitch 1];
+                nconsecutive = 0;
+            else
+                lateWasSwitch = [lateWasSwitch 0];
+                nconsecutive = nconsecutive + 1;
+            end
+        end
+    end
+end
+
+glm = fitglm([latePastPalatability' lateAlternativePalatability'],lateWasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([latePastPalatability' lateAlternativePalatability' latePastDuration'],lateWasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([latePastPalatability' lateAlternativePalatability' latePastDuration' lateNumConsecutive'],lateWasSwitch','interactions','Distribution','binomial','Link','logit');
+%glm = fitglm([latePastPalatability' lateAlternativePalatability' latePastDuration' lateNumConsecutive' lateTotalDuration'],lateWasSwitch','interactions','Distribution','binomial','Link','logit');
+glm.plotSlice();
+glm.plotResiduals('probability')
+glm
+glm.Rsquared
+
+palatabilityVals = 0:.01:3;
+alternative_palatabilityVals = 0:.01:3;
+latePredictedVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+lateUpperCIVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+lateLowerCIVals = zeros(length(palatabilityVals),length(alternative_palatabilityVals));
+totalEvals = length(palatabilityVals)*length(alternative_palatabilityVals);
+evalCount = 0;
+for i=1:length(palatabilityVals)
+    for j=1:length(palatabilityVals)
+        [y,yci] = glm.predict([palatabilityVals(i),alternative_palatabilityVals(j)]);
+        latePredictedVals(i,j) = y;
+        lateLowerCIVals(i,j) = yci(1);
+        lateUpperCIVals(i,j) = yci(2);
+        evalCount = evalCount + 1;
+        if (mod(evalCount,round(totalEvals/10)) == 0)
+            disp([num2str((evalCount/totalEvals)*100) '% done'])
+        end
+    end
+end
+
+%% Transition probabilities following stay or switch
+allPostStayTransitions = [];
+allPostSwitchTransitions = [];
+allPostStayCurPals = [];
+allPostSwitchCurPals = [];
+allPostStayAltPals = [];
+allPostSwitchAltPals = [];
+stayGLMCurPalCoeffs = [];
+stayGLMAltPalCoeffs = [];
+switchGLMCurPalCoeffs = [];
+switchGLMAltPalCoeffs = [];
+%for i=1:length(animalObjs)
+for i=setdiff(1:length(animalObjs),5)
+    postStayTransition = [];
+    postSwitchTransition = [];
+    postStayCurPal = [];
+    postSwitchCurPal = [];
+    postStayAltPal = [];
+    postSwitchAltPal = [];
+    ratInds = find(strcmp(boutTable.rat,animalObjs(i).name));
+    for j=animalObjs(i).difSolutionDays
+        dayInds = find(strcmp(boutTable.date,animalObjs(i).dates{j}));
+        curTableInds = intersect(ratInds,dayInds);
+        [~,sortedOrder] = sort(boutTable.onset(curTableInds));
+        sortedInds = curTableInds(sortedOrder);
+        for k=2:(length(sortedInds)-1)
+            if (boutTable.solutionNum(sortedInds(k)) == boutTable.solutionNum(sortedInds(k-1)))
+                % following a stay decision
+                if (boutTable.solutionNum(sortedInds(k)) == boutTable.solutionNum(sortedInds(k+1)))
+                    postStayTransition = [postStayTransition 0];
+                else
+                    postStayTransition = [postStayTransition 1];
+                end
+                postStayCurPal = [postStayCurPal boutTable.palatability(sortedInds(k))];
+                postStayAltPal = [postStayAltPal boutTable.alternative_palatability(sortedInds(k))];
+            else
+                % following a switch decision
+                if (boutTable.solutionNum(sortedInds(k)) == boutTable.solutionNum(sortedInds(k+1)))
+                    postSwitchTransition = [postSwitchTransition 0];
+                else
+                    postSwitchTransition = [postSwitchTransition 1];
+                end
+                postSwitchCurPal = [postSwitchCurPal boutTable.palatability(sortedInds(k))];
+                postSwitchAltPal = [postSwitchAltPal boutTable.alternative_palatability(sortedInds(k))];
+            end
+        end
+    end
+    stayGLMs{i} = fitglm([postStayCurPal' postStayAltPal'],postStayTransition','interactions','Distribution','binomial','Link','logit');
+    switchGLMs{i} = fitglm([postSwitchCurPal' postSwitchAltPal'],postSwitchTransition','interactions','Distribution','binomial','Link','logit');
+    allPostStayTransitions = [allPostStayTransitions postStayTransition];
+    allPostSwitchTransitions = [allPostSwitchTransitions postSwitchTransition];
+    allPostStayCurPals = [allPostStayCurPals postStayCurPal];
+    allPostSwitchCurPals = [allPostSwitchCurPals postSwitchCurPal];
+    allPostStayAltPals = [allPostStayAltPals postStayAltPal];
+    allPostSwitchAltPals = [allPostSwitchAltPals postSwitchAltPal];
+    stayGLMCurPalCoeffs = [stayGLMCurPalCoeffs stayGLMs{i}.Coefficients(2,1).Variables];
+    stayGLMAltPalCoeffs = [stayGLMAltPalCoeffs stayGLMs{i}.Coefficients(3,1).Variables];
+    switchGLMCurPalCoeffs = [switchGLMCurPalCoeffs switchGLMs{i}.Coefficients(2,1).Variables];
+    switchGLMAltPalCoeffs = [switchGLMAltPalCoeffs switchGLMs{i}.Coefficients(3,1).Variables];
+end
+allStayGLM = fitglm([allPostStayCurPals' allPostStayAltPals'],allPostStayTransitions,'interactions','Distribution','binomial','Link','logit');
+allSwitchGLM = fitglm([allPostSwitchCurPals' allPostSwitchAltPals'],allPostSwitchTransitions,'interactions','Distribution','binomial','Link','logit');
+
+figure;
+subplot(1,2,1)
+[stayGLMCurPalCoeffsNoOutliers,stayGLMCurPalCoeffsOutlierInds] = rmoutliers(stayGLMCurPalCoeffs);
+[switchGLMCurPalCoeffsNoOutliers,switchGLMCurPalCoeffsOutlierInds] = rmoutliers(switchGLMCurPalCoeffs);
+notBoxPlot([stayGLMCurPalCoeffsNoOutliers switchGLMCurPalCoeffsNoOutliers],[ones(1,length(stayGLMCurPalCoeffsNoOutliers)) ones(1,length(switchGLMCurPalCoeffsNoOutliers))*2])
+set(gca,'xtick',[1 2],'xticklabels',{'Stay','Switch'},'fontsize',15,'fontweight','bold')
+ylabel('Palatability coefficient','fontsize',15,'fontweight','bold')
+subplot(1,2,2)
+[stayGLMAltPalCoeffsNoOutliers,stayGLMAltPalCoeffsOutlierInds] = rmoutliers(stayGLMAltPalCoeffs);
+[switchGLMAltPalCoeffsNoOutliers,switchGLMAltPalCoeffsOutlierInds] = rmoutliers(switchGLMAltPalCoeffs);
+notBoxPlot([stayGLMAltPalCoeffsNoOutliers switchGLMAltPalCoeffsNoOutliers],[ones(1,length(stayGLMAltPalCoeffsNoOutliers)) ones(1,length(switchGLMAltPalCoeffsNoOutliers))*2])
+set(gca,'xtick',[1 2],'xticklabels',{'Stay','Switch'},'fontsize',15,'fontweight','bold')
+ylabel('Alternative palatability coefficient','fontsize',15,'fontweight','bold')
+suptitle('Logistic regression coefficients: Outliers removed','fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1400 1000])
+if (do_save)
+    figName = 'logistic_regression_coefficients_palatability_alternative_palatability_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Plot early and late switch probability surfaces
+surf(palatabilityVals,alternative_palatabilityVals,earlyPredictedVals','FaceColor','b','EdgeColor','b','FaceAlpha',.3)
+hold on;
+surf(palatabilityVals,alternative_palatabilityVals,latePredictedVals','FaceColor','r','EdgeColor','r','FaceAlpha',.3)
+xlabel('Current palatability','fontsize',15,'fontweight','bold');
+ylabel('Alternative palatability','fontsize',15,'fontweight','bold');
+zlabel('Switch probability','fontsize',15,'fontweight','bold')
+legend({'Early','Late'},'fontsize',15,'fontweight','bold')
+
+%% Compare common source/target transition probabilities
+%
+% 3 transition matrices per animal
+%   (1 - Pab)     Pba           (1 - Pac)      Pca          (1 - Pbc)     Pcb
+%      Pab      (1 - Pba)          Pac      (1 - Pca)          Pbc      (1 - Pcb)
+%
+% Common source pairs:
+%   Pab,Pac
+%   Pba,Pbc
+%   Pca,Pcb
+% Common target pairs:
+%   Pba,Pca
+%   Pab,Pcb
+%   Pac,Pbc
+clear commonSourceTransVals
+solnPairInds = [2 3; 2 4; 3 4];
+commonSourcePairInds = {[2 3 2 1; 2 4 2 1],[2 3 1 2; 3 4 2 1],[2 4 1 2; 3 4 1 2]};
+commonTargetPairInds = {[2 3 1 2; 2 4 1 2],[2 3 2 1; 3 4 1 2],[2 4 2 1; 3 4 2 1]};
+sourcePairTitles = {'P_{a -> b} vs. P_{a -> c}','P_{b -> a} vs. P_{b -> c}','P_{c -> a} vs. P_{c -> b}'};
+targetPairTitles = {'P_{b -> a} vs. P_{c -> a}','P_{a -> b} vs. P_{c -> b}','P_{a -> c} vs. P_{b -> c}'};
+sourcePairStrings = {{'P_{a -> b}','P_{a -> c}'},{'P_{b -> a}','P_{b -> c}'},{'P_{c -> a}','P_{c -> b}'}};
+targetPairStrings = {{'P_{b -> a}','P_{c -> a}'},{'P_{a -> b}','P_{c -> b}'},{'P_{a -> c}','P_{b -> c}'}};
+commonSourceTransVals = cell(length(commonSourcePairInds),2);
+earlyCommonSourceTransVals = cell(length(commonSourcePairInds),2);
+lateCommonSourceTransVals = cell(length(commonSourcePairInds),2);
+for i=1:length(commonSourcePairInds)
+    for j=1:length(animalObjs)
+        % All bouts
+        curTransMat1 = boutTransitionProbs{j}{commonSourcePairInds{i}(1,1),commonSourcePairInds{i}(1,2)};
+        curTransMat2 = boutTransitionProbs{j}{commonSourcePairInds{i}(2,1),commonSourcePairInds{i}(2,2)};
+        commonSourceTransVals{i,1} = [commonSourceTransVals{i,1} curTransMat1(commonSourcePairInds{i}(1,3),commonSourcePairInds{i}(1,4))];
+        commonSourceTransVals{i,2} = [commonSourceTransVals{i,2} curTransMat2(commonSourcePairInds{i}(2,3),commonSourcePairInds{i}(2,4))];
+        % Early bouts
+        curTransMat1 = earlyBoutTransitionProbs{j}{commonSourcePairInds{i}(1,1),commonSourcePairInds{i}(1,2)};
+        curTransMat2 = earlyBoutTransitionProbs{j}{commonSourcePairInds{i}(2,1),commonSourcePairInds{i}(2,2)};
+        earlyCommonSourceTransVals{i,1} = [earlyCommonSourceTransVals{i,1} curTransMat1(commonSourcePairInds{i}(1,3),commonSourcePairInds{i}(1,4))];
+        earlyCommonSourceTransVals{i,2} = [earlyCommonSourceTransVals{i,2} curTransMat2(commonSourcePairInds{i}(2,3),commonSourcePairInds{i}(2,4))];
+        % Late bouts
+        curTransMat1 = lateBoutTransitionProbs{j}{commonSourcePairInds{i}(1,1),commonSourcePairInds{i}(1,2)};
+        curTransMat2 = lateBoutTransitionProbs{j}{commonSourcePairInds{i}(2,1),commonSourcePairInds{i}(2,2)};
+        lateCommonSourceTransVals{i,1} = [lateCommonSourceTransVals{i,1} curTransMat1(commonSourcePairInds{i}(1,3),commonSourcePairInds{i}(1,4))];
+        lateCommonSourceTransVals{i,2} = [lateCommonSourceTransVals{i,2} curTransMat2(commonSourcePairInds{i}(2,3),commonSourcePairInds{i}(2,4))];
+    end
+end
+commonTargetTransVals = cell(length(commonTargetPairInds),2);
+earlyCommonTargetTransVals = cell(length(commonTargetPairInds),2);
+lateCommonTargetTransVals = cell(length(commonTargetPairInds),2);
+for i=1:length(commonTargetPairInds)
+    for j=1:length(animalObjs)
+        % All bouts
+        curTransMat1 = boutTransitionProbs{j}{commonTargetPairInds{i}(1,1),commonTargetPairInds{i}(1,2)};
+        curTransMat2 = boutTransitionProbs{j}{commonTargetPairInds{i}(2,1),commonTargetPairInds{i}(2,2)}; 
+        commonTargetTransVals{i,1} = [commonTargetTransVals{i,1} curTransMat1(commonTargetPairInds{i}(1,3),commonTargetPairInds{i}(1,4))];
+        commonTargetTransVals{i,2} = [commonTargetTransVals{i,2} curTransMat2(commonTargetPairInds{i}(2,3),commonTargetPairInds{i}(2,4))];
+        % Early bouts
+        curTransMat1 = earlyBoutTransitionProbs{j}{commonTargetPairInds{i}(1,1),commonTargetPairInds{i}(1,2)};
+        curTransMat2 = earlyBoutTransitionProbs{j}{commonTargetPairInds{i}(2,1),commonTargetPairInds{i}(2,2)}; 
+        earlyCommonTargetTransVals{i,1} = [earlyCommonTargetTransVals{i,1} curTransMat1(commonTargetPairInds{i}(1,3),commonTargetPairInds{i}(1,4))];
+        earlyCommonTargetTransVals{i,2} = [earlyCommonTargetTransVals{i,2} curTransMat2(commonTargetPairInds{i}(2,3),commonTargetPairInds{i}(2,4))];
+        % Late bouts
+        curTransMat1 = lateBoutTransitionProbs{j}{commonTargetPairInds{i}(1,1),commonTargetPairInds{i}(1,2)};
+        curTransMat2 = lateBoutTransitionProbs{j}{commonTargetPairInds{i}(2,1),commonTargetPairInds{i}(2,2)}; 
+        lateCommonTargetTransVals{i,1} = [lateCommonTargetTransVals{i,1} curTransMat1(commonTargetPairInds{i}(1,3),commonTargetPairInds{i}(1,4))];
+        lateCommonTargetTransVals{i,2} = [lateCommonTargetTransVals{i,2} curTransMat2(commonTargetPairInds{i}(2,3),commonTargetPairInds{i}(2,4))];
+    end
+end
+figure;
+for i=1:length(commonSourcePairInds)
+    subplot(1,3,i)
+    [p1,h1] = signrank(commonSourceTransVals{i,1},commonSourceTransVals{i,2},'tail','right');
+    [p2,h2] = signrank(commonSourceTransVals{i,1},commonSourceTransVals{i,2},'tail','left');
+    [p3,h3] = signrank(commonSourceTransVals{i,1},commonSourceTransVals{i,2});
+    p1 = p1*6; % Bonferroni correction
+    p2 = p2*6; % Bonferroni correction
+    if (p1 < .05)
+        curText = [sourcePairStrings{i}{1} ' > ' sourcePairStrings{i}{2} ' p = ' num2str(p1)];
+    elseif (p2 < .05)
+        curText = [sourcePairStrings{i}{1} ' < ' sourcePairStrings{i}{2} ' p = ' num2str(p2)];
+    else
+        curText = [sourcePairStrings{i}{1} ' = ' sourcePairStrings{i}{2} ' p = ' num2str(p3)];
+    end
+    notBoxPlot([commonSourceTransVals{i,1} commonSourceTransVals{i,2}],[ones(1,length(commonSourceTransVals{i,1})) ones(1,length(commonSourceTransVals{i,2}))*2]);
+    ylim([0 1])
+    ylabel('Transition probability','fontsize',15,'fontweight','bold')
+    set(gca,'xtick',[1 2],'xticklabels',{sourcePairStrings{i}{1},sourcePairStrings{i}{2}},'fontsize',15,'fontweight','bold')
+    title(curText,'fontsize',15,'fontweight','bold')
+end
+suptitle('Common source')
+set(gcf,'Position',[10 10 1600 1000])
+if (do_save)
+    figName = 'common_source_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+for i=1:length(commonTargetPairInds)
+    subplot(1,3,i)
+    [p1,h1] = signrank(commonTargetTransVals{i,1},commonTargetTransVals{i,2},'tail','right');
+    [p2,h2] = signrank(commonTargetTransVals{i,1},commonTargetTransVals{i,2},'tail','left');
+    [p3,h3] = signrank(commonTargetTransVals{i,1},commonTargetTransVals{i,2});
+    p1 = p1*6; % Bonferroni correction
+    p2 = p2*6; % Bonferroni correction
+    if (p1 < .05)
+        curText = [targetPairStrings{i}{1} ' > ' targetPairStrings{i}{2} ' p = ' num2str(p1)];
+    elseif (p2 < .05)
+        curText = [targetPairStrings{i}{1} ' < ' targetPairStrings{i}{2} ' p = ' num2str(p2)];
+    else
+        curText = [targetPairStrings{i}{1} ' = ' targetPairStrings{i}{2} ' p = ' num2str(p3)];
+    end
+    notBoxPlot([commonTargetTransVals{i,1} commonTargetTransVals{i,2}],[ones(1,length(commonTargetTransVals{i,1})) ones(1,length(commonTargetTransVals{i,2}))*2]);
+    ylim([0 1])
+    ylabel('Transition probability','fontsize',15,'fontweight','bold')
+    set(gca,'xtick',[1 2],'xticklabels',{targetPairStrings{i}{1},targetPairStrings{i}{2}},'fontsize',15,'fontweight','bold')
+    title(curText,'fontsize',15,'fontweight','bold')
+end
+suptitle('Common target')
+set(gcf,'Position',[10 10 1600 1000])
+if (do_save)
+    figName = 'common_target_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+for i=1:length(commonSourcePairInds)
+    subplot(1,3,i)
+    [p1,h1] = signrank(earlyCommonSourceTransVals{i,1},earlyCommonSourceTransVals{i,2},'tail','right');
+    [p2,h2] = signrank(earlyCommonSourceTransVals{i,1},earlyCommonSourceTransVals{i,2},'tail','left');
+    [p3,h3] = signrank(earlyCommonSourceTransVals{i,1},earlyCommonSourceTransVals{i,2});
+    p1 = p1*6; % Bonferroni correction
+    p2 = p2*6; % Bonferroni correction
+    if (p1 < .05)
+        curText = [sourcePairStrings{i}{1} ' > ' sourcePairStrings{i}{2} ' p = ' num2str(p1)];
+    elseif (p2 < .05)
+        curText = [sourcePairStrings{i}{1} ' < ' sourcePairStrings{i}{2} ' p = ' num2str(p2)];
+    else
+        curText = [sourcePairStrings{i}{1} ' = ' sourcePairStrings{i}{2} ' p = ' num2str(p3)];
+    end
+    notBoxPlot([earlyCommonSourceTransVals{i,1} earlyCommonSourceTransVals{i,2}],[ones(1,length(earlyCommonSourceTransVals{i,1})) ones(1,length(earlyCommonSourceTransVals{i,2}))*2]);
+    ylim([0 1])
+    ylabel('Transition probability','fontsize',15,'fontweight','bold')
+    set(gca,'xtick',[1 2],'xticklabels',{sourcePairStrings{i}{1},sourcePairStrings{i}{2}},'fontsize',15,'fontweight','bold')
+    title(curText,'fontsize',15,'fontweight','bold')
+end
+suptitle('Early common source')
+set(gcf,'Position',[10 10 1600 1000])
+if (do_save)
+    figName = 'common_source_early_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+for i=1:length(commonTargetPairInds)
+    subplot(1,3,i)
+    [p1,h1] = signrank(earlyCommonTargetTransVals{i,1},earlyCommonTargetTransVals{i,2},'tail','right');
+    [p2,h2] = signrank(earlyCommonTargetTransVals{i,1},earlyCommonTargetTransVals{i,2},'tail','left');
+    [p3,h3] = signrank(earlyCommonTargetTransVals{i,1},earlyCommonTargetTransVals{i,2});
+    p1 = p1*6; % Bonferroni correction
+    p2 = p2*6; % Bonferroni correction
+    if (p1 < .05)
+        curText = [targetPairStrings{i}{1} ' > ' targetPairStrings{i}{2} ' p = ' num2str(p1)];
+    elseif (p2 < .05)
+        curText = [targetPairStrings{i}{1} ' < ' targetPairStrings{i}{2} ' p = ' num2str(p2)];
+    else
+        curText = [targetPairStrings{i}{1} ' = ' targetPairStrings{i}{2} ' p = ' num2str(p3)];
+    end
+    notBoxPlot([earlyCommonTargetTransVals{i,1} earlyCommonTargetTransVals{i,2}],[ones(1,length(earlyCommonTargetTransVals{i,1})) ones(1,length(earlyCommonTargetTransVals{i,2}))*2]);
+    ylim([0 1])
+    ylabel('Transition probability','fontsize',15,'fontweight','bold')
+    set(gca,'xtick',[1 2],'xticklabels',{targetPairStrings{i}{1},targetPairStrings{i}{2}},'fontsize',15,'fontweight','bold')
+    title(curText,'fontsize',15,'fontweight','bold')
+end
+suptitle('Early common target')
+set(gcf,'Position',[10 10 1600 1000])
+if (do_save)
+    figName = 'common_target_early_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+for i=1:length(commonSourcePairInds)
+    subplot(1,3,i)
+    [p1,h1] = signrank(lateCommonSourceTransVals{i,1},lateCommonSourceTransVals{i,2},'tail','right');
+    [p2,h2] = signrank(lateCommonSourceTransVals{i,1},lateCommonSourceTransVals{i,2},'tail','left');
+    [p3,h3] = signrank(lateCommonSourceTransVals{i,1},lateCommonSourceTransVals{i,2});
+    p1 = p1*6; % Bonferroni correction
+    p2 = p2*6; % Bonferroni correction
+    if (p1 < .05)
+        curText = [sourcePairStrings{i}{1} ' > ' sourcePairStrings{i}{2} ' p = ' num2str(p1)];
+    elseif (p2 < .05)
+        curText = [sourcePairStrings{i}{1} ' < ' sourcePairStrings{i}{2} ' p = ' num2str(p2)];
+    else
+        curText = [sourcePairStrings{i}{1} ' = ' sourcePairStrings{i}{2} ' p = ' num2str(p3)];
+    end
+    notBoxPlot([lateCommonSourceTransVals{i,1} lateCommonSourceTransVals{i,2}],[ones(1,length(lateCommonSourceTransVals{i,1})) ones(1,length(lateCommonSourceTransVals{i,2}))*2]);
+    ylim([0 1])
+    ylabel('Transition probability','fontsize',15,'fontweight','bold')
+    set(gca,'xtick',[1 2],'xticklabels',{sourcePairStrings{i}{1},sourcePairStrings{i}{2}},'fontsize',15,'fontweight','bold')
+    title(curText,'fontsize',15,'fontweight','bold')
+end
+suptitle('Late common source')
+set(gcf,'Position',[10 10 1600 1000])
+if (do_save)
+    figName = 'common_source_late_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+for i=1:length(commonTargetPairInds)
+    subplot(1,3,i)
+    [p1,h1] = signrank(lateCommonTargetTransVals{i,1},lateCommonTargetTransVals{i,2},'tail','right');
+    [p2,h2] = signrank(lateCommonTargetTransVals{i,1},lateCommonTargetTransVals{i,2},'tail','left');
+    [p3,h3] = signrank(lateCommonTargetTransVals{i,1},lateCommonTargetTransVals{i,2});
+    p1 = p1*6; % Bonferroni correction
+    p2 = p2*6; % Bonferroni correction
+    if (p1 < .05)
+        curText = [targetPairStrings{i}{1} ' > ' targetPairStrings{i}{2} ' p = ' num2str(p1)];
+    elseif (p2 < .05)
+        curText = [targetPairStrings{i}{1} ' < ' targetPairStrings{i}{2} ' p = ' num2str(p2)];
+    else
+        curText = [targetPairStrings{i}{1} ' = ' targetPairStrings{i}{2} ' p = ' num2str(p3)];
+    end
+    notBoxPlot([lateCommonTargetTransVals{i,1} lateCommonTargetTransVals{i,2}],[ones(1,length(lateCommonTargetTransVals{i,1})) ones(1,length(lateCommonTargetTransVals{i,2}))*2]);
+    ylim([0 1])
+    ylabel('Transition probability','fontsize',15,'fontweight','bold')
+    set(gca,'xtick',[1 2],'xticklabels',{targetPairStrings{i}{1},targetPairStrings{i}{2}},'fontsize',15,'fontweight','bold')
+    title(curText,'fontsize',15,'fontweight','bold')
+end
+suptitle('Late common target')
+set(gcf,'Position',[10 10 1600 1000])
+if (do_save)
+    figName = 'common_target_late_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Look at # of licks and amount consumed at A or B on AB pair days
+Alicks = [];
+Blicks = [];
+Aconsumed = [];
+Bconsumed = [];
+for i=1:length(animalObjs)
+    for j=1:size(animalObjs(i).solutions)
+        if (any(ismember(animalObjs(i).solutions(j,:),2)) & any(ismember(animalObjs(i).solutions(j,:),3)))
+            Aind = find(animalObjs(i).solutions(j,:) == 2);
+            Bind = find(animalObjs(i).solutions(j,:) == 3);
+            if (Aind == Bind)
+                error('Solution A and B should not have the same index')
+            end
+            Alicks = [Alicks animalObjs(i).nLicksByBoxSide(j,Aind)];
+            Blicks = [Blicks animalObjs(i).nLicksByBoxSide(j,Bind)];
+            Aconsumed = [Aconsumed animalObjs(i).amountsConsumed(j,Aind)];
+            Bconsumed = [Bconsumed animalObjs(i).amountsConsumed(j,Bind)];
+        end
+    end
+end
+
+figure;
+notBoxPlot([Alicks Blicks],[ones(1,length(Alicks)) ones(1,length(Blicks))*2])
+set(gca,'xtick',[1 2],'xticklabels',{'.01M','.1M'},'fontsize',15,'fontweight','bold')
+title('Licks','fontsize',15,'fontweight','bold')
+[p,h] = ranksum(Alicks,Blicks,'tail','right')
+
+figure;
+notBoxPlot([Aconsumed Bconsumed],[ones(1,length(Aconsumed)) ones(1,length(Bconsumed))*2])
+set(gca,'xtick',[1 2],'xticklabels',{'.01M','.1M'},'fontsize',15,'fontweight','bold')
+title('Amount consumed','fontsize',15,'fontweight','bold')
+[p,h] = ranksum(Aconsumed,Bconsumed,'tail','right')
+
+%% Look at # of licks and amount consumed at A or C on AC pair days
+Alicks = [];
+Clicks = [];
+Aconsumed = [];
+Cconsumed = [];
+for i=1:length(animalObjs)
+    for j=1:size(animalObjs(i).solutions)
+        if (any(ismember(animalObjs(i).solutions(j,:),2)) & any(ismember(animalObjs(i).solutions(j,:),4)))
+            Aind = find(animalObjs(i).solutions(j,:) == 2);
+            Cind = find(animalObjs(i).solutions(j,:) == 4);
+            if (Aind == Cind)
+                error('Solution A and B should not have the same index')
+            end
+            Alicks = [Alicks animalObjs(i).nLicksByBoxSide(j,Aind)];
+            Clicks = [Clicks animalObjs(i).nLicksByBoxSide(j,Cind)];
+            Aconsumed = [Aconsumed animalObjs(i).amountsConsumed(j,Aind)];
+            Cconsumed = [Cconsumed animalObjs(i).amountsConsumed(j,Cind)];
+        end
+    end
+end
+
+figure;
+notBoxPlot([Alicks Clicks],[ones(1,length(Alicks)) ones(1,length(Clicks))*2])
+set(gca,'xtick',[1 2],'xticklabels',{'.01M','1M'},'fontsize',15,'fontweight','bold')
+title('Licks','fontsize',15,'fontweight','bold')
+[p,h] = ranksum(Alicks,Clicks,'tail','right')
+
+figure;
+notBoxPlot([Aconsumed Cconsumed],[ones(1,length(Aconsumed)) ones(1,length(Cconsumed))*2])
+set(gca,'xtick',[1 2],'xticklabels',{'.01M','1M'},'fontsize',15,'fontweight','bold')
+title('Amount consumed','fontsize',15,'fontweight','bold')
+[p,h] = ranksum(Aconsumed,Cconsumed,'tail','right')
+
+%% Look at # of licks and amount consumed at B or C on BC pair days
+Blicks = [];
+Clicks = [];
+Bconsumed = [];
+Cconsumed = [];
+for i=1:length(animalObjs)
+    for j=1:size(animalObjs(i).solutions)
+        if (any(ismember(animalObjs(i).solutions(j,:),3)) & any(ismember(animalObjs(i).solutions(j,:),4)))
+            Bind = find(animalObjs(i).solutions(j,:) == 3);
+            Cind = find(animalObjs(i).solutions(j,:) == 4);
+            if (Bind == Cind)
+                error('Solution A and B should not have the same index')
+            end
+            Blicks = [Blicks animalObjs(i).nLicksByBoxSide(j,Bind)];
+            Clicks = [Clicks animalObjs(i).nLicksByBoxSide(j,Cind)];
+            Bconsumed = [Bconsumed animalObjs(i).amountsConsumed(j,Bind)];
+            Cconsumed = [Cconsumed animalObjs(i).amountsConsumed(j,Cind)];
+        end
+    end
+end
+
+figure;
+notBoxPlot([Blicks Clicks],[ones(1,length(Blicks)) ones(1,length(Clicks))*2])
+set(gca,'xtick',[1 2],'xticklabels',{'.1M','1M'},'fontsize',15,'fontweight','bold')
+title('Licks','fontsize',15,'fontweight','bold')
+[p,h] = ranksum(Blicks,Clicks,'tail','right')
+
+figure;
+notBoxPlot([Bconsumed Cconsumed],[ones(1,length(Bconsumed)) ones(1,length(Cconsumed))*2])
+set(gca,'xtick',[1 2],'xticklabels',{'.1M','1M'},'fontsize',15,'fontweight','bold')
+title('Amount consumed','fontsize',15,'fontweight','bold')
+[p,h] = ranksum(Bconsumed,Cconsumed,'tail','right')
+
+%% Figure 22: # of bouts for each solution pair
+figure;
+xlabels = {'H2O/H2O','A/A','A/B','A/C','B/B','B/C','C/C'};
+nBoutsByPair = cell(1,7);
+for i=setdiff(1:length(animalObjs),5) % exclude bb12
+    count = 0;
+    for j=1:4
+        for k=j:4
+            if (j == 1 && k > 1)
+                continue;
+            end
+            count = count+1;
+            nBoutsByPair{count} = [nBoutsByPair{count} allNbouts{i}{j,k}];
+        end
+    end
+end
+for i=1:length(nBoutsByPair)
+    scatter(i*ones(1,length(nBoutsByPair{i})),nBoutsByPair{i},100,'k.')
+    hold on;
+    plot([i-.2 i+.2],[mean(nBoutsByPair{i}) mean(nBoutsByPair{i})],'r')
+    plot([i-.2 i+.2],[median(nBoutsByPair{i}) median(nBoutsByPair{i})],'b')
+end
+set(gca,'xtick',1:7,'xticklabels',xlabels,'xticklabelrotation',20,'fontsize',15,'fontweight','bold'); xlim([0 8])
+ylabel('# of bouts','fontsize',15,'fontweight','bold')
+hold off;
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'number_of_bouts_by_solution_bouts200';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 23: # of switches for each solution pair
+figure;
+xlabels = {'H2O/H2O','A/A','A/B','A/C','B/B','B/C','C/C'};
+nSwitchVals = cell(1,7);
+for i=setdiff(1:length(animalObjs),5) % exclude bb12
+    count = 0;
+    for j=1:4
+        for k=j:4
+            if (j == 1 && k > 1)
+                continue;
+            end
+            count = count+1;
+            nSwitchVals{count} = [nSwitchVals{count} allSolnNswitches{i}{j,k}];
+        end
+    end
+end
+for i=1:length(nSwitchVals)
+    scatter(i*ones(1,length(nSwitchVals{i})),nSwitchVals{i},100,'k.')
+    hold on;
+    plot([i-.2 i+.2],[mean(nSwitchVals{i}) mean(nSwitchVals{i})],'r')
+    plot([i-.2 i+.2],[median(nSwitchVals{i}) median(nSwitchVals{i})],'b')
+end
+set(gca,'xtick',1:7,'xticklabels',xlabels,'xticklabelrotation',20,'fontsize',15,'fontweight','bold'); xlim([0 8])
+ylabel('# of switches','fontsize',15,'fontweight','bold')
+hold off;
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'number_of_switches_by_solution_pair';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+
+
+%% Figure 24: probability of choosing preferred side from day before first by animal
+nPriorPreferred = zeros(1,length(setdiff(1:length(animalObjs),5)));
+nPriorPreferredFrac = zeros(1,length(setdiff(1:length(animalObjs),5)));
+count = 0;
+totalBinomTestCount = 0;
+for i=setdiff(1:length(animalObjs),5) % exclude bb12
+    count = count + 1;
+    for j=2:length(animalObjs(i).dates)
+        totalBinomTestCount = totalBinomTestCount + 1;
+        disp(['Fig 24: ' animalObjs(i).name ' ' animalObjs(i).dates{j}])
+        licks = load(['analyzed_data/' animalObjs(i).dates{j-1} '/' animalObjs(i).name '/licks.mat']); licks=licks.licks;
+        if (isempty(licks{1}))
+            if (strcmp(licks{2}(1).box_side,'left'))
+                nLicksLeft = length(licks{2});
+                nLicksRight = 0;
+            elseif (strcmp(licks{2}(1).box_side,'right'))
+                nLicksRight = length(licks{2});
+                nLicksLeft = 0;
+            else
+                error('neither channel had any licks')
+            end
+        elseif (isempty(licks{2}))
+            if (strcmp(licks{1}(1).box_side,'left'))
+                nLicksLeft = length(licks{1});
+                nLicksRight = 0;
+            elseif (strcmp(licks{1}(1).box_side,'right'))
+                nLicksRight = length(licks{1});
+                nLicksLeft = 0;
+            end
+        else
+            if (strcmp(licks{1}(1).box_side,'left'))
+                nLicksLeft = length(licks{1});
+                nLicksright = length(licks{2});
+            else
+                nLicksRight = length(licks{1});
+                nLicksLeft = length(licks{2});
+            end
+        end
+        if (nLicksLeft > nLicksRight)
+            priorPreferred = 'left';
+        else
+            priorPreferred = 'right';
+        end
+        firstBout = animalObjs(i).linBoutsByDay{j}(1);
+        if (strcmp(firstBout.box_side,priorPreferred))
+            nPriorPreferred(count) = nPriorPreferred(count) + 1;
+        end 
+    end
+    nPriorPreferredFrac(count) = nPriorPreferred(count)/(length(animalObjs(i).dates)-1);
+end
+binomPDF = binopdf(0:1:totalBinomTestCount,totalBinomTestCount,.5);
+figure;
+histogram(nPriorPreferredFrac,'binwidth',.05)
+xlabel('Probability of choosing prior preferred side','fontsize',15,'fontweight','bold')
+ylabel('# of animals','fontsize',15,'fontweight','bold')
+set(gcf,'Position',[10 10 1600 1200])
+if (do_save)
+    figName = 'probability_of_choosing_prior_day_preferred_side';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+figure;
+plot(binomPDF); hold on; plot([sum(nPriorPreferred) sum(nPriorPreferred)],[0 .1],'r')
+xlabel('# of prior preferred chosen','fontsize',15,'fontweight','bold');
+ylabel('Probability density','fontsize',15,'fontweight','bold')
+if (do_save)
+    figName = 'prior_day_preferred_binomial_test';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end 
+
+%% Figure 28: # of switches by solution pair 1st vs. 2nd session
+allFirstVisitInds = cell(1,length(animalObjs));
+allSecondVisitInds = cell(1,length(animalObjs));
+for i=1:length(animalObjs)
+    firstVisitInds = nan(1,7);
+    secondVisitInds = nan(1,7);
+    for j=1:length(animalObjs(i).dates)
+        if (animalObjs(i).solutions(j,1) == 1 && animalObjs(i).solutions(j,2) == 1)
+            solnPairID = 1;
+        elseif (any(ismember(animalObjs(i).solutions(j,:),2)) && any(ismember(animalObjs(i).solutions(j,:),3)))
+            solnPairID = 2;
+        elseif (any(ismember(animalObjs(i).solutions(j,:),2)) && any(ismember(animalObjs(i).solutions(j,:),4)))
+            solnPairID = 3;
+        elseif (any(ismember(animalObjs(i).solutions(j,:),3)) && any(ismember(animalObjs(i).solutions(j,:),4)))
+            solnPairID = 4;
+        elseif (animalObjs(i).solutions(j,1) == 3 && animalObjs(i).solutions(j,2) == 3)
+            solnPairID = 5;
+        elseif (animalObjs(i).solutions(j,1) == 4 && animalObjs(i).solutions(j,2) == 4)
+            solnPairID = 6;
+        elseif (animalObjs(i).solutions(j,1) == 2 && animalObjs(i).solutions(j,2) == 2)
+            solnPairID = 7;
+        else
+            error('Cannot identify solution pair')
+        end
+        if (isnan(firstVisitInds(solnPairID)))
+            firstVisitInds(solnPairID) = j;
+        else
+            secondVisitInds(solnPairID) = j;
+        end
+    end
+    allFirstVisitInds{i} = firstVisitInds;
+    allSecondVisitInds{i} = secondVisitInds;
+end
+
+firstVisitSwitches = zeros(length(animalObjs),7);
+secondVisitSwitches = zeros(length(animalObjs),7);
+for i=1:length(animalObjs)
+    for j=1:7
+        if (~isnan(allFirstVisitInds{i}(j)))
+            [T,transitionCount,totalTransitions,nswitches,nbouts] = getBoutTransitionMatrix(animalObjs(i).bouts{allFirstVisitInds{i}(j)},animalObjs(i).solutions(allFirstVisitInds{i}(j),:));
+            firstVisitSwitches(i,j) = nswitches;
+        else
+            firstVisitSwitches(i,j) = nan;
+        end
+        if (~isnan(allSecondVisitInds{i}(j)))
+            [T,transitionCount,totalTransitions,nswitches,nbouts] = getBoutTransitionMatrix(animalObjs(i).bouts{allSecondVisitInds{i}(j)},animalObjs(i).solutions(allSecondVisitInds{i}(j),:));
+            secondVisitSwitches(i,j) = nswitches;
+        else
+            secondVisitSwitches(i,j) = nan;
+        end
+    end
+end
+meanFirstVisitSwitches = mean(firstVisitSwitches,1,'omitnan');
+stdFirstVisitSwitches = std(firstVisitSwitches,[],1,'omitnan');
+meanSecondVisitSwitches = mean(secondVisitSwitches,1,'omitnan');
+stdSecondVisitSwitches = std(secondVisitSwitches,[],1,'omitnan');
+%xlabels = {'H2O/H2O','A/A','A/B','A/C','B/B','B/C','C/C'};
+xlabels = {'H2O/H2O','A/B','A/C','B/C','B/B','C/C','A/A'};
+figure;
+shadedErrorBar(1:7,meanFirstVisitSwitches,stdFirstVisitSwitches,'lineprops','-r')
+hold on;
+shadedErrorBar(1:7,meanSecondVisitSwitches,stdSecondVisitSwitches,'lineprops','-b')
+set(gca,'xtick',1:7,'xticklabels',xlabels,'fontsize',15,'fontweight','bold')
+ylabel('# of switches','fontsize',15,'fontweight','bold')
+if (do_save)
+    figName = 'nSwitches_by_solutionPair_1st_vs_2nd_exposure';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'eps')
+    print([figFolder figName],'-dpng','-r600')
+end
+
+%% Figure 30: Fitting different distributions to bout durations
+doubleExponential = @(x,w,lambda1,lambda2) w*expdf(x,lambda1) + (1-w)*exppdf(x,lambda2);
+doubleNormal = @(x,w,mu1,mu2,std1,std2) w*normpdf(x,mu1,std1) + (1-w)*normpdf(x,mu2,std2);
+distributionNames = {'exponential','poisson','normal','lognormal','gamma','doubleExponential','doubleNormal'};
+distributionFuncs = {@exppdf,@poisspdf,@normpdf,@lognpdf,@gampdf,@doubleExponential,@doubleNormal};
+bestFitParams = cell(length(animalObjs),4,length(distributionNames));
+BIC_fits = zeros(length(animalObjs),4,length(distributionNames));
+AIC_fits = zeros(length(animalObjs),4,length(distributionNames));
+neglogliks = nan(length(animalObjs),4,length(distributionNames));
+bestBICInds = nan(length(animalObjs),4);
+bestAICInds = nan(length(animalObjs),4);
+x = 0:1:600;
+for i=1:length(animalObjs)
+    for j=1:4
+        curDurations = [animalObjs(i).boutsBySolution{j}.duration];
+        curDurationsLength = length(curDurations);
+        bestBIC = inf;
+        bestAIC = inf;
+        for k=1:length(distributionNames)
+            if (k <= 5)
+                pd = fitdist(curDurations',distributionNames{k});
+                if (k == 2)
+                    disp(num2str(pd.negloglik))
+                end
+                bestFitParams{i,j,k} = pd.ParameterValues;
+                neglogliks(i,j,k) = pd.negloglik;
+                bic = pd.NumParameters*log(length(pd.InputData.data)) + 2*pd.negloglik;
+                aic = 2*pd.NumParameters + 2*pd.negloglik;
+            elseif (k == 6)
+                lambdaStart = bestFitParams{i,j,1};
+                startVec = [.9 lambdaStart 10*lambdaStart];
+                startVec = sort(startVec,'descend');
+                try
+                    [phat,pic] = mle(curDurations,'pdf',doubleExponential,'start',startVec);
+                    negloglik = -sum(log(doubleExponential(curDurations,phat(1),phat(2),phat(3))));
+                    bestFitParams{i,j,k} = phat;
+                    neglogliks(i,j,k) = negloglik;
+                    bic = 3*log(curDurationsLength) + 2*negloglik;
+                    aic = 2*3 + 2*negloglik;
+                catch
+                    bestFitParams{i,j,k} = nan(1,length(startVec));
+                    neglogliks(i,j,k) = nan;
+                    bic = nan;
+                    aic = nan;
+                end
+            elseif (k == 7)
+                muStart = bestFitParams{i,j,3}(1);
+                stdStart = bestFitParams{i,j,3}(2);
+                muStartVec = [muStart 10*muStart];
+                stdStartVec = [.5*stdStart 5*stdStart];
+                startVec = [.9 muStartVec stdStartVec];
+                try
+                    [phat,pic] = mle(curDurations,'pdf',doubleNormal,'start',startVec);
+                    negloglik = -sum(log(doubleNormal(curDurations,phat(1),phat(2),phat(3),phat(4),phat(5))));
+                    bestFitParams{i,j,k} = phat;
+                    neglogliks(i,j,k) = negloglik;
+                    bic = 5*log(curDurationsLength) + 2*negloglik;
+                    aic = 2*5 + 2*negloglik;
+                catch
+                    bestFitParams{i,j,k} = nan(1,length(startVec));
+                    neglogliks(i,j,k) = nan;
+                    bic = nan;
+                    aic = nan;
+                end
+            end
+            
+            BIC_fits(i,j,k) = bic;
+            AIC_fits(i,j,k) = aic;
+            if (bic < bestBIC)
+                bestBIC = bic;
+                bestBICInds(i,j) = k;
+            end
+            if (aic < bestAIC)
+                bestAIC = aic;
+                bestAICInds(i,j) = k;
+            end
+        end
+    end
+end
+
+%% Figure 31
+% Fit distributions to ILI distributions
+%doubleNormal = @(x,w,mu1,mu2,std1,std2) w*normpdf(x,mu1,std1) + (1-w)*normpdf(x,mu2,std2);
+doubleNormal = @(x,w,mu1,mu2,std1,std2) max(1e-100,(w/(std1*sqrt(2*pi)))*exp(-.5*((x - mu1)./std1).^2) + ((1-w)/(std2*sqrt(2*pi)))*exp(-.5*((x - mu2)./std2).^2));
+doubleNormalPhat = cell(length(animalObjs),4);
+expPhat = cell(4,length(animalObjs));
+iliNegLogLiks = nan(length(animalObjs),4,2);
+allILIsBySolution = cell(1,4);
+for i=1:length(animalObjs)
+    figure;
+    for j=1:4
+        if (any(animalObjs(i).ilisBySolution{j} < 0))
+            disp([num2str(i) ' ' num2str(j) ' has negative ilis'])
+            badinds = find(animalObjs(i).ilisBySolution{j} < 0);
+            goodILIs = animalObjs(i).ilisBySolution{j}(setdiff(1:length(animalObjs(i).ilisBySolution{j}),badinds));
+            disp(['num bad inds ' num2str(length(badinds))])
+        else
+            goodILIs = animalObjs(i).ilisBySolution{j};
+        end
+        allILIsBySolution{j} = [allILIsBySolution{j} goodILIs(goodILIs <= 2)];
+        if (length(goodILIs) < 100)
+            disp([num2str(i) ' ' num2str(j)])
+        end
+        curMean = mean(goodILIs);
+        curStd = std(goodILIs);
+        pd = fitdist(goodILIs','exponential');
+        expPhat{j,i} = pd.ParameterValues;
+        iliNegLogLiks(i,j,1) = pd.negloglik;
+        isDone = 0;
+        tryNumber = 0;
+        bestNegLogLik = Inf;
+        bestParams = [];
+        for k=1:10
+            lb = [.001 .001 .001 .001 .001];
+            ub = [.999 2 2 2 2];
+            startVec = [(rand*(ub(1)-lb(1)) + lb(1)) (rand*(ub(2)-lb(2)) + lb(2)) (rand*(ub(3)-lb(3)) + lb(3)) (rand*(ub(4)-lb(4)) + lb(4)) (rand*(ub(5)-lb(5)) + lb(5))];
+            [phat,pic] = mle(goodILIs,'pdf',doubleNormal,'start',startVec,'LowerBound',lb,'UpperBound',ub,'optimfun','fmincon');
+            negloglik = -sum(log(doubleNormal(goodILIs,phat(1),phat(2),phat(3),phat(4),phat(5))));
+            if (negloglik < bestNegLogLik)
+                bestNegLogLik = negloglik;
+                bestParams = phat;
+            end
+        end
+        iliNegLogLiks(i,j,2) = bestNegLogLik;
+        doubleNormalPhat{i,j} = bestParams;
+        subplot(2,2,j)
+        histogram(goodILIs,'normalization','pdf','binwidth',.005);
+        hold on;
+        xvec = 0:.001:max(goodILIs);
+        plot(xvec,doubleNormal(xvec,bestParams(1),bestParams(2),bestParams(3),bestParams(4),bestParams(5)))
+        xlabel('ILI (s)')
+        ylabel('Probability Density')
+    end
+    disp(['Done fitting ILI distributions for animal ' num2str(i)])
+end
+
+%% Fit ILI distributions
+bestParams = cell(1,4);
+for i=1:4
+    bestNegLogLik = Inf;
+    lb = [.001 .001 .001 .001 .001];
+    ub = [.999 2 2 2 2];
+    for j=1:50
+        startVec = [(rand*(ub(1)-lb(1)) + lb(1)) (rand*(ub(2)-lb(2)) + lb(2)) (rand*(ub(3)-lb(3)) + lb(3)) (rand*(ub(4)-lb(4)) + lb(4)) (rand*(ub(5)-lb(5)) + lb(5))];
+        [phat,pic] = mle(goodILIs,'pdf',doubleNormal,'start',startVec,'LowerBound',lb,'UpperBound',ub,'optimfun','fmincon');
+        negloglik = -sum(log(doubleNormal(goodILIs,phat(1),phat(2),phat(3),phat(4),phat(5))));
+        if (negloglik < bestNegLogLik)
+            bestNegLogLik = negloglik;
+            bestParams{i} = phat;
+        end
+    end
+end
+figure;
+for i=1:4
+    subplot(2,2,i)
+    histogram(allILIsBySolution{i},'normalization','pdf','binwidth',.001)
+    hold on;
+    xvec = 0:.001:2;
+    plot(xvec,doubleNormal(xvec,bestParams{i}(1),bestParams{i}(2),bestParams{i}(3),bestParams{i}(4),bestParams{i}(5)))
+    xlim([0 2])
+end
+suptitle('All animal ILIs combined')
+
