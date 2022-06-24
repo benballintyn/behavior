@@ -2160,24 +2160,39 @@ histogram(allYWOD{1}(origIndsWOD),'BinWidth',2)
 regSTATSWD = regstats(allYWD{1}(origIndsWD),allXWD{1}(origIndsWD,[1 2]));
 regSTATSWOD = regstats(allYWOD{1}(origIndsWOD),allXWOD{1}(origIndsWOD,[1 2]));
 
+%% N-way anova with interactions : all data < 60s dt
+Y = [allYWD{1}; allYWOD{1}];
+factors = {[allXWD{1}(:,1); allXWOD{1}(:,1)], [allXWD{1}(:,2); allXWOD{1}(:,2)], ...
+    [allXWD{1}(:,3); allXWOD{1}(:,3)], [true(size(allYWD{1},1),1); false(size(allYWOD{1},1),1)]};
+varnames = {'Pal(cur)','Pal(alt)','Dt(alt)','HasDist'};
+isContinuous = [1 2 3];
+interactionMatrix = [1 0 0 0
+                     0 1 0 0
+                     0 0 1 0
+                     0 0 0 1
+                     0 1 1 0
+                     0 1 0 1];
+                     
+[p,tbl,stats,terms] = anovan(Y,factors,'model',interactionMatrix,'continuous',...
+                             isContinuous,'varnames',varnames);
 
-%{
-allXNoDistractor = [];
-allYNoDistractor = [];
-allXDistractor = [];
-allYDistractor = [];
-for i=1:length(animalObjs)
-    allXNoDistractor = [allXNoDistractor; allXWithoutDistractor{i}];
-    allYNoDistractor = [allYNoDistractor; allYWithoutDistractor{i}];
-    allXDistractor = [allXDistractor; allXWithDistractor{i}];
-    allYDistractor = [allYDistractor; allYWithDistractor{i}];
-end
+%% N-way anova with all data
+allXBothBinsWD = [allXWD{1}(:,1:3); allXWD{2}(:,1:3)];
+allXBothBinsWOD = [allXWOD{1}(:,1:3); allXWOD{2}(:,1:3)];
+allYBothBinsWD = [allYWD{1}; allYWD{2}];
+allYBothBinsWOD = [allYWOD{1}; allYWOD{2}];
+YbothBins = [allYBothBinsWD; allYBothBinsWOD];
+factors = {[allXBothBinsWD(:,1); allXBothBinsWOD(:,1)],[allXBothBinsWD(:,2); allXBothBinsWOD(:,2)],...
+    [allXBothBinsWD(:,3); allXBothBinsWOD(:,3)],[true(size(allYBothBinsWD,1),1); false(size(allYBothBinsWOD,1),1)]};
+varnames = {'Pal(cur)','Pal(alt)','Dt(alt)','HasDist'};
+isContinuous = [1 2 3];
+interactionMatrix = [1 0 0 0
+                     0 1 0 0
+                     0 0 1 0
+                     0 0 0 1
+                     0 1 1 0
+                     0 1 0 1];
+[p,tbl,stats,terms] = anovan(YbothBins,factors,'model',interactionMatrix,'continuous',...
+                             isContinuous,'varnames',varnames);
 
-figure;
-scatter(allXNoDistractor(:,3),allYNoDistractor,20,'filled','MarkerEdgeColor','red','MarkerFaceColor','red')
-hold on;
-scatter(allXDistractor(:,3),allYDistractor,20,'filled','MarkerEdgeColor','blue','MarkerFaceColor','blue')
-legend({'No distractor','Distractor'})
-xlabel('Time since last visit to alternative (s)')
-ylabel('Bout duration')
-%}
+%% N-way anova with matched samples from all data
