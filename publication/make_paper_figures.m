@@ -2031,8 +2031,6 @@ allXWithDistractor = cell(1,1);
 allYWithDistractor = cell(1,1);
 allXWithoutDistractor = cell(1,1);
 allYWithoutDistractor = cell(1,1);
-X = cell(1,1);
-Y = cell(1,1);
 for i=1:length(animalObjs)
     allXWithDistractor{i} = [];
     allYWithDistractor{i} = [];
@@ -2175,6 +2173,22 @@ interactionMatrix = [1 0 0 0
                      
 [p,tbl,stats,terms] = anovan(Y,factors,'model',interactionMatrix,'continuous',...
                              isContinuous,'varnames',varnames);
+                         
+%% N-way anova with interactions : matched deltaT distributions all data < 60s dt
+Y = [allYWD{1}(origIndsWD); allYWOD{1}(origIndsWOD)];
+factors = {[allXWD{1}(origIndsWD,1); allXWOD{1}(origIndsWOD,1)], [allXWD{1}(origIndsWD,2); allXWOD{1}(origIndsWOD,2)], ...
+    [allXWD{1}(origIndsWD,3); allXWOD{1}(origIndsWOD,3)], [true(length(origIndsWD),1); false(length(origIndsWOD),1)]};
+varnames = {'Pal(cur)','Pal(alt)','Dt(alt)','HasDist'};
+isContinuous = [1 2 3];
+interactionMatrix = [1 0 0 0
+                     0 1 0 0
+                     0 0 1 0
+                     0 0 0 1
+                     0 1 1 0
+                     0 1 0 1];
+                     
+[p,tbl,stats,terms] = anovan(Y,factors,'model',interactionMatrix,'continuous',...
+                             isContinuous,'varnames',varnames);
 
 %% N-way anova with all data
 allXBothBinsWD = [allXWD{1}(:,1:3); allXWD{2}(:,1:3)];
@@ -2196,3 +2210,41 @@ interactionMatrix = [1 0 0 0
                              isContinuous,'varnames',varnames);
 
 %% N-way anova with matched samples from all data
+allXWD = [];
+allXWOD = [];
+allYWD = [];
+allYWOD = [];
+for i=1:length(animalObjs)
+    allXWD = [allXWD; allXWithDistractor{i}];
+    allXWOD = [allXWOD; allXWithoutDistractor{i}];
+    allYWD = [allYWD; allYWithDistractor{i}];
+    allYWOD = [allYWOD; allYWithoutDistractor{i}];
+end
+deltaTWD = allXWD(:,3);
+deltaTWOD = allXWOD(:,3);
+[sortedDeltaTWD, sortIndsTWD] = sort(deltaTWD);
+[sortedDeltaTWOD, sortIndsTWOD] = sort(deltaTWOD);
+
+
+diffMatrix = abs(sortedDeltaTWD - sortedDeltaTWOD');
+[M,uR,uC] = matchpairs(diffMatrix,10); % 10 chosen empirically to maximize number of samples
+origIndsWD = sortIndsTWD(M(:,1));
+origIndsWOD = sortIndsTWOD(M(:,2));
+
+figure;
+histogram(deltaTWD(origIndsWD),'normalization','pdf','binwidth',10)
+hold on;
+histogram(deltaTWOD(origIndsWOD),'normalization','pdf','binwidth',10)
+
+factors = {[allXWD(:,1); allXWOD(:,1)],[allXWD(:,2); allXWOD(:,2)],[allXWD(:,3); allXWOD(:,3)],[true(size(allYWD,1),1); false(size(allYWOD,1),1)]};
+varnames = {'Pal(cur)', 'Pal(alt)', 'Dt(alt)','HasDist'};
+isContinuous = [1 2 3];
+interactionMatrix = [1 0 0 0
+                     0 1 0 0
+                     0 0 1 0
+                     0 0 0 1
+                     0 1 1 0
+                     0 1 0 1];
+                 
+[p,tbl,stats,terms] = anovan([allYWD; allYWOD],factors,'model',interactionMatrix,'continuous',...
+                             isContinuous,'varnames',varnames);
