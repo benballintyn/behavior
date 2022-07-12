@@ -1971,19 +1971,7 @@ end
 %stdErr = std(altSolCoeffs,1,'omitnan')./sqrt(sum(~isnan(altSolCoeffs),1));
 %figure;
 %shadedErrorBar(bins,mean(altSolCoeffs,1,'omitnan'),stdErr)
-figure;
-notBoxPlot(altSolCoeffs)
-ylabel({'Normalized alternative','palatability coefficients'})
-set(gca,'xticklabels',{['\Delta t_{last visit} < ' num2str(bins(1))],['\Delta t_{last visit} < ' num2str(bins(2))]})
-set(gcf,'Position',[10 10 1200 600])
-[p,h] = ranksum(altSolCoeffs(:,1),altSolCoeffs(:,2))
-if (do_save)
-    figName = 'fig11A_normalized_alt_coefficients_by_time_since_last_visit';
-    saveas(gcf,[figFolder figName],'fig')
-    saveas(gcf,[figFolder figName],'epsc')
-    saveas(gcf,[figFolder figName],'svg')
-    print([figFolder figName],'-dpng','-r600')
-end
+
 
 minbins = 10:1:60;
 pvals = nan(1,length(minbins));
@@ -2011,6 +1999,20 @@ for t=1:length(minbins)
     end
     [p,h] = ranksum(altSolCoeffs(:,1),altSolCoeffs(:,2));
     pvals(t) = p;
+end
+
+figure;
+notBoxPlot(altSolCoeffs)
+ylabel({'Normalized alternative','palatability coefficients'})
+set(gca,'xticklabels',{['\Delta t_{last visit} < ' num2str(bins(1))],['\Delta t_{last visit} < ' num2str(bins(2))]})
+set(gcf,'Position',[10 10 1200 600])
+[p,h] = ranksum(altSolCoeffs(:,1),altSolCoeffs(:,2))
+if (do_save)
+    figName = 'fig11A_normalized_alt_coefficients_by_time_since_last_visit';
+    saveas(gcf,[figFolder figName],'fig')
+    saveas(gcf,[figFolder figName],'epsc')
+    saveas(gcf,[figFolder figName],'svg')
+    print([figFolder figName],'-dpng','-r600')
 end
 
 figure;
@@ -2096,11 +2098,11 @@ for i=1:length(animalObjs)
         allYWOD{j} = [allYWOD{j}; allYWithoutDistractor{i}(indsWOD)];
         skipFlag = false;
         if (size(XWD{j},1) < 2)
-            disp(['animal ' num2str(i) ' bin ' num2str(j) ' thrown out (N = ' num2str(size(X{j},1)) ') : WD'])
+            disp(['animal ' num2str(i) ' bin ' num2str(j) ' thrown out (N = ' num2str(size(XWD{j},1)) ') : WD'])
             skipFlag = true;
         end
         if (size(XWOD{j},1) < 2)
-            disp(['animal ' num2str(i) ' bin ' num2str(j) ' thrown out (N = ' num2str(size(X{j},1)) ') : WOD'])
+            disp(['animal ' num2str(i) ' bin ' num2str(j) ' thrown out (N = ' num2str(size(XWOD{j},1)) ') : WOD'])
             skipFlag = true;
         end
         if (skipFlag)
@@ -2175,6 +2177,65 @@ interactionMatrix = [1 0 0 0
                              isContinuous,'varnames',varnames);
                          
 %% N-way anova with interactions : matched deltaT distributions all data < 60s dt
+lt60IndsWD = find(allXWD{1}(:,3) <= 60);
+lt60IndsWOD = find(allXWOD{1}(:,3) <= 60);
+[sortedLT60WD,sortedLT60WD_inds] = sort(allXWD{1}(lt60IndsWD,3));
+[sortedLT60WOD,sortedLT60WOD_inds] = sort(allXWOD{1}(lt60IndsWOD,3));
+diffMatrix = abs(sortedLT60WD - sortedLT60WOD');
+[M,uR,uC] = matchpairs(diffMatrix,.1);
+origIndsWD = sortedLT60WD_inds(M(:,1));
+origIndsWOD = sortedLT60WOD_inds(M(:,2));
+
+Y = [allYWD{1}(origIndsWD); allYWOD{1}(origIndsWOD)];
+factors = {[allXWD{1}(origIndsWD,1); allXWOD{1}(origIndsWOD,1)], [allXWD{1}(origIndsWD,2); allXWOD{1}(origIndsWOD,2)], ...
+    [allXWD{1}(origIndsWD,3); allXWOD{1}(origIndsWOD,3)], [true(length(origIndsWD),1); false(length(origIndsWOD),1)]};
+varnames = {'Pal(cur)','Pal(alt)','Dt(alt)','HasDist'};
+isContinuous = [1 2 3];
+interactionMatrix = [1 0 0 0
+                     0 1 0 0
+                     0 0 1 0
+                     0 0 0 1
+                     0 1 1 0
+                     0 1 0 1];
+                     
+[p,tbl,stats,terms] = anovan(Y,factors,'model',interactionMatrix,'continuous',...
+                             isContinuous,'varnames',varnames);
+
+%% N-way anova with interactions : matched deltaT distributions all data < 40s dt
+lt40IndsWD = find(allXWD{1}(:,3) <= 40);
+lt40IndsWOD = find(allXWOD{1}(:,3) <= 40);
+[sortedLT40WD,sortedLT40WD_inds] = sort(allXWD{1}(lt40IndsWD,3));
+[sortedLT40WOD,sortedLT40WOD_inds] = sort(allXWOD{1}(lt40IndsWOD,3));
+diffMatrix = abs(sortedLT40WD - sortedLT40WOD');
+[M,uR,uC] = matchpairs(diffMatrix,.1);
+origIndsWD = sortedLT40WD_inds(M(:,1));
+origIndsWOD = sortedLT40WOD_inds(M(:,2));
+
+Y = [allYWD{1}(origIndsWD); allYWOD{1}(origIndsWOD)];
+factors = {[allXWD{1}(origIndsWD,1); allXWOD{1}(origIndsWOD,1)], [allXWD{1}(origIndsWD,2); allXWOD{1}(origIndsWOD,2)], ...
+    [allXWD{1}(origIndsWD,3); allXWOD{1}(origIndsWOD,3)], [true(length(origIndsWD),1); false(length(origIndsWOD),1)]};
+varnames = {'Pal(cur)','Pal(alt)','Dt(alt)','HasDist'};
+isContinuous = [1 2 3];
+interactionMatrix = [1 0 0 0
+                     0 1 0 0
+                     0 0 1 0
+                     0 0 0 1
+                     0 1 1 0
+                     0 1 0 1];
+                     
+[p,tbl,stats,terms] = anovan(Y,factors,'model',interactionMatrix,'continuous',...
+                             isContinuous,'varnames',varnames);
+
+%% N-way anova with interactions : matched deltaT distributions all data < 30s dt
+lt20IndsWD = find(allXWD{1}(:,3) <= 30);
+lt20IndsWOD = find(allXWOD{1}(:,3) <= 30);
+[sortedLT20WD,sortedLT20WD_inds] = sort(allXWD{1}(lt20IndsWD,3));
+[sortedLT20WOD,sortedLT20WOD_inds] = sort(allXWOD{1}(lt20IndsWOD,3));
+diffMatrix = abs(sortedLT20WD - sortedLT20WOD');
+[M,uR,uC] = matchpairs(diffMatrix,.1);
+origIndsWD = sortedLT20WD_inds(M(:,1));
+origIndsWOD = sortedLT20WOD_inds(M(:,2));
+
 Y = [allYWD{1}(origIndsWD); allYWOD{1}(origIndsWOD)];
 factors = {[allXWD{1}(origIndsWD,1); allXWOD{1}(origIndsWOD,1)], [allXWD{1}(origIndsWD,2); allXWOD{1}(origIndsWOD,2)], ...
     [allXWD{1}(origIndsWD,3); allXWOD{1}(origIndsWOD,3)], [true(length(origIndsWD),1); false(length(origIndsWOD),1)]};
@@ -2247,4 +2308,156 @@ interactionMatrix = [1 0 0 0
                      0 1 0 1];
                  
 [p,tbl,stats,terms] = anovan([allYWD; allYWOD],factors,'model',interactionMatrix,'continuous',...
+                             isContinuous,'varnames',varnames);
+
+%% Perform ANOVA analyses on model data
+modelDatadir = '~/phd/behavior/Model/';
+fastAB_files = dir([modelDatadir 'fast-AB']);
+fastAB_files = fastAB_files(~ismember({fastAB_files.name},{'.','..'}));
+
+fastAC_files = dir([modelDatadir 'fast-AC']);
+fastAC_files = fastAC_files(~ismember({fastAC_files.name},{'.','..'}));
+
+fastBC_files = dir([modelDatadir 'fast-BC']);
+fastBC_files = fastBC_files(~ismember({fastBC_files.name},{'.','..'}));
+
+% Load fast (entice-to-stay) network data
+stimuli = {'stim_A','stim_B'};
+nAB_fast = length(fastAB_files);
+nAC_fast = length(fastAC_files);
+nBC_fast = length(fastBC_files);
+fastDataAB = cell(1,nAB_fast);
+allFastData = []; %nan(nAB_fast + nAC_fast,4);
+for i=1:nAB_fast
+    data = load([modelDatadir '/fast-AB/' fastAB_files(i).name]); data=data.file_data;
+    prevStim = [];
+    for j=1:size(data.sim_results,1)
+        if (strcmp(data.sim_results.state{j},'leave'))
+            continue;
+        elseif (isempty(prevStim))
+            prevStim = data.sim_results.state{j};
+        else
+            curStim = data.sim_results.state{j};
+            temp = setdiff(stimuli,curStim);
+            altStim = temp{1};
+            curPal = data.(curStim);
+            altPal = data.(altStim);
+            altBouts = find(strcmp(data.sim_results.state(1:j),altStim));
+            if (isempty(altBouts))
+                timeSinceLastAltVisit = nan;
+                wasDistractor = nan;
+            else
+                lastVisitInd = altBouts(end);
+                timeSinceLastAltVisit = sum(data.sim_results.duration((lastVisitInd+1):(j-1)));
+                wasDistractor = any(contains(data.sim_results.state(lastVisitInd:(j-1)),curStim));
+            end
+            
+            fastDataAB{i} = [fastDataAB{i}; data.sim_results.duration(j) curPal altPal timeSinceLastAltVisit wasDistractor];
+            allFastData = [allFastData; data.sim_results.duration(j) curPal altPal timeSinceLastAltVisit wasDistractor];
+            prevStim = curStim;
+        end
+    end
+    if (mod(i,ceil(nAB_fast/100)) == 0)
+        disp([num2str((i/nAB_fast)*100) '% done with AB_fast'])
+    end
+end
+
+fastDataAC = cell(1,nAC_fast);
+for i=1:nAC_fast
+    data = load([modelDatadir '/fast-AC/' fastAC_files(i).name]); data=data.file_data;
+    prevStim = [];
+    for j=1:size(data.sim_results,1)
+        if (strcmp(data.sim_results.state{j},'leave'))
+            continue;
+        elseif (isempty(prevStim))
+            prevStim = data.sim_results.state{j};
+        else
+            curStim = data.sim_results.state{j};
+            temp = setdiff(stimuli,curStim);
+            altStim = temp{1};
+            curPal = data.(curStim);
+            altPal = data.(altStim);
+            altBouts = find(strcmp(data.sim_results.state(1:j),altStim));
+            if (isempty(altBouts))
+                timeSinceLastAltVisit = nan;
+                wasDistractor = nan;
+            else
+                lastVisitInd = altBouts(end);
+                timeSinceLastAltVisit = sum(data.sim_results.duration((lastVisitInd+1):(j-1)));
+                wasDistractor = any(contains(data.sim_results.state(lastVisitInd:(j-1)),curStim));
+            end
+            
+            fastDataAC{i} = [fastDataAC{i}; data.sim_results.duration(j) curPal altPal timeSinceLastAltVisit wasDistractor];
+            allFastData = [allFastData; data.sim_results.duration(j) curPal altPal timeSinceLastAltVisit wasDistractor];
+            prevStim = curStim;
+        end
+    end
+    if (mod(i,ceil(nAC_fast/100)) == 0)
+        disp([num2str((i/nAC_fast)*100) '% done with AC_fast'])
+    end
+end
+
+fastDataBC = cell(1,nBC_fast);
+for i=1:nBC_fast
+    data = load([modelDatadir '/fast-BC/' fastBC_files(i).name]); data=data.file_data;
+    prevStim = [];
+    for j=1:size(data.sim_results,1)
+        if (strcmp(data.sim_results.state{j},'leave'))
+            continue;
+        elseif (isempty(prevStim))
+            prevStim = data.sim_results.state{j};
+        else
+            curStim = data.sim_results.state{j};
+            temp = setdiff(stimuli,curStim);
+            altStim = temp{1};
+            curPal = data.(curStim);
+            altPal = data.(altStim);
+            altBouts = find(strcmp(data.sim_results.state(1:j),altStim));
+            if (isempty(altBouts))
+                timeSinceLastAltVisit = nan;
+                wasDistractor = nan;
+            else
+                lastVisitInd = altBouts(end);
+                timeSinceLastAltVisit = sum(data.sim_results.duration((lastVisitInd+1):(j-1)));
+                wasDistractor = any(contains(data.sim_results.state(lastVisitInd:(j-1)),curStim));
+            end
+            
+            fastDataBC{i} = [fastDataBC{i}; data.sim_results.duration(j) curPal altPal timeSinceLastAltVisit wasDistractor];
+            allFastData = [allFastData; data.sim_results.duration(j) curPal altPal timeSinceLastAltVisit wasDistractor];
+            prevStim = curStim;
+        end
+    end
+    if (mod(i,ceil(nAC_fast/100)) == 0)
+        disp([num2str((i/nBC_fast)*100) '% done with BC_fast'])
+    end
+end
+
+%%
+validInds = intersect(find(~isnan(allFastData(:,4))),find(~isnan(allFastData(:,5))));
+validFastData = allFastData(validInds,:);
+lt60Inds = find(validFastData(:,4) <= 60);
+lt60WDInds = intersect(lt60Inds,find(validFastData(:,5)));
+lt60WODInds = intersect(lt60Inds,find(~validFastData(:,5)));
+[sortedLT60WD,sortedLT60WD_inds] = sort(validFastData(lt60WDInds,4));
+[sortedLT60WOD,sortedLT60WOD_inds] = sort(validFastData(lt60WODInds,4));
+randIndsWD = sort(datasample(1:length(sortedLT60WD),floor(length(sortedLT60WD)/10)));
+randIndsWOD = sort(datasample(1:length(sortedLT60WOD),floor(length(sortedLT60WOD)/10)));
+diffMatrix = abs(sortedLT60WD(randIndsWD) - sortedLT60WOD(randIndsWOD)');
+[M,uR,uC] = matchpairs(diffMatrix,100);
+origIndsWD = lt60WDInds(sortedLT60WD_inds(randIndsWD(M(:,1))));
+origIndsWOD = lt60WODInds(sortedLT60WOD_inds(randIndsWOD(M(:,2))));
+
+Y = log([validFastData(origIndsWD,1); validFastData(origIndsWOD,1)]);
+factors = {[validFastData(origIndsWD,2); validFastData(origIndsWOD,2)],[validFastData(origIndsWD,3); validFastData(origIndsWOD,3)],...
+           [validFastData(origIndsWD,4); validFastData(origIndsWOD,4)],[validFastData(origIndsWD,5); validFastData(origIndsWOD,5)]};
+varnames = {'Pal(cur)','Pal(alt)','Dt(alt)','HasDist'};
+isContinuous = [1 2 3];
+interactionMatrix = [1 0 0 0
+                     0 1 0 0
+                     0 0 1 0
+                     0 0 0 1
+                     0 1 1 0
+                     0 1 0 1];
+                     
+[p,tbl,stats,terms] = anovan(Y,factors,'model',interactionMatrix,'continuous',...
                              isContinuous,'varnames',varnames);
