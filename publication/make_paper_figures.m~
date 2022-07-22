@@ -1997,7 +1997,7 @@ for t=1:length(minbins)
             end
         end
     end
-    [p,h] = ranksum(altSolCoeffs(:,1),altSolCoeffs(:,2),'tail','left');
+    [p,h] = ranksum(altSolCoeffs(:,1),altSolCoeffs(:,2));
     pvals(t) = p;
 end
 
